@@ -3,12 +3,13 @@ pragma solidity ^0.8.26;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract Dreamscroll is ERC721, Ownable {
-    using Counters for Counters.Counter;
-    Counters.Counter private _movieIds;
-    Counters.Counter private _seriesIds;
+    using Strings for uint256;
+    
+    uint256 private _nextMovieId;
+    uint256 private _nextSeriesId;
 
     struct Movie {
         string prompt;
@@ -40,8 +41,6 @@ contract Dreamscroll is ERC721, Ownable {
     mapping(address => uint256[]) public creatorMovies;
     mapping(uint256 => Comment[]) public movieComments;
     mapping(uint256 => mapping(address => bool)) public hasLiked;
-    
-    // Video tracking mappings
     mapping(address => uint256[]) public videosSeenByUser;
     mapping(address => mapping(uint256 => bool)) public hasSeenVideo;
 
@@ -58,38 +57,40 @@ contract Dreamscroll is ERC721, Ownable {
     constructor() ERC721("Dreamscroll", "DREAM") Ownable(msg.sender) {}
 
     function createSeries(string memory name) public returns (uint256) {
-        uint256 newSeriesId = _seriesIds.current();
+        uint256 newSeriesId = _nextSeriesId++;
         Series storage newSeries = series[newSeriesId];
         newSeries.name = name;
         newSeries.creator = msg.sender;
         newSeries.producer = address(0);
         newSeries.isActive = true;
         emit SeriesCreated(newSeriesId, msg.sender, name);
-        _seriesIds.increment();
         return newSeriesId;
     }
 
     function createMovie(string memory prompt, uint256 seriesId) public returns (uint256) {
-        require(seriesId == type(uint256).max || series[seriesId].creator == msg.sender, "Not series creator");
-        require(seriesId == type(uint256).max || series[seriesId].isActive, "Series is not active");
-        
-        uint256 newMovieId = _movieIds.current();
-        uint256 sequenceNumber = 0;
-
-        if (seriesId != type(uint256).max) {
-            sequenceNumber = series[seriesId].movieIds.length;
-            series[seriesId].movieIds.push(newMovieId);
+        if (seriesId == type(uint256).max) {
+            seriesId = createSeries(string(abi.encodePacked("Series for Movie ", _nextMovieId.toString())));
         }
+        require(series[seriesId].creator == msg.sender, "Not series creator");
+        require(series[seriesId].isActive, "Series is not active");
+    
+        uint256 newMovieId = _nextMovieId++;
+        uint256 sequenceNumber = series[seriesId].movieIds.length;
+        series[seriesId].movieIds.push(newMovieId);
 
         _safeMint(msg.sender, newMovieId);
 
         movies[newMovieId] = Movie(prompt, "", msg.sender, address(0), seriesId, sequenceNumber, 0);
         creatorMovies[msg.sender].push(newMovieId);
-        
+    
         emit MovieCreated(newMovieId, msg.sender, prompt, seriesId, sequenceNumber);
 
-        _movieIds.increment();
         return newMovieId;
+    }
+
+    function createMovieWithNewSeries(string memory prompt, string memory seriesName) public returns (uint256) {
+        uint256 newSeriesId = createSeries(seriesName);
+        return createMovie(prompt, newSeriesId);
     }
 
     function updateMovieLink(uint256 movieId, string memory newLink) public {
@@ -166,6 +167,19 @@ contract Dreamscroll is ERC721, Ownable {
     function getUserChoices(uint256 seriesId, uint256 sequenceNumber) public view returns (string[] memory) {
         return series[seriesId].userChoices[sequenceNumber];
     }
+    
+    function getAllSeriesChoices(uint256 seriesId) public view returns (string[][] memory) {
+        require(series[seriesId].movieIds.length > 0, "No movies in the series");
+
+        uint256 movieCount = series[seriesId].movieIds.length;
+        string[][] memory allChoices = new string[][](movieCount);
+
+        for (uint256 i = 0; i < movieCount; i++) {
+            allChoices[i] = series[seriesId].userChoices[i];
+        }
+
+        return allChoices;
+    }
 
     function getCreatorMovies(address creator) public view returns (uint256[] memory) {
         return creatorMovies[creator];
@@ -202,7 +216,71 @@ contract Dreamscroll is ERC721, Ownable {
         return hasSeenVideo[user][movieId];
     }
 
-    function _exists(uint256 tokenId) internal view override returns (bool) {
+    function _exists(uint256 tokenId) internal view returns (bool) {
         return _ownerOf(tokenId) != address(0);
+    }
+    
+    function getNextUnwatchedMovie(address user) public view returns (uint256) {
+        uint256 latestValidMovie = type(uint256).max;
+        uint256 latestValidSeriesMovie = type(uint256).max;
+    
+        // Iterate backwards from most recent movies
+        for (uint256 i = _nextMovieId; i > 0; i--) {
+            uint256 movieId = i - 1;
+        
+            // Skip if movie doesn't exist or user has seen it
+            if (!_exists(movieId) || hasSeenVideo[user][movieId]) {
+                continue;
+            }
+        
+            // Skip if movie doesn't have a link
+            if (bytes(movies[movieId].link).length == 0) {
+                continue;
+            }
+        
+            // If this is a series movie
+            if (movies[movieId].seriesId != type(uint256).max) {
+                // Check if series is active
+                if (series[movies[movieId].seriesId].isActive) {
+                    // For series, we want the earliest unwatched episode
+                    uint256 seriesId = movies[movieId].seriesId;
+                    uint256[] memory seriesMovies = series[seriesId].movieIds;
+                
+                    // Find the first unwatched episode in this series
+                    for (uint256 j = 0; j < seriesMovies.length; j++) {
+                        uint256 episodeId = seriesMovies[j];
+                        if (!hasSeenVideo[user][episodeId] && 
+                            bytes(movies[episodeId].link).length > 0) {
+                            latestValidSeriesMovie = episodeId;
+                            // Break as we want the first unwatched episode
+                            break;
+                        }
+                    }
+                
+                    // If we found a valid series movie, we can stop searching
+                    if (latestValidSeriesMovie != type(uint256).max) {
+                        break;
+                    }
+                }
+            } else {
+                // For non-series movies, just take the most recent unwatched one
+                if (latestValidMovie == type(uint256).max) {
+                    latestValidMovie = movieId;
+                }
+            }
+        }
+    
+        // Prefer series content over standalone movies
+        if (latestValidSeriesMovie != type(uint256).max) {
+            return latestValidSeriesMovie;
+        }
+    
+        // Fall back to standalone movie if no series content is available
+        if (latestValidMovie != type(uint256).max) {
+            return latestValidMovie;
+        }
+    
+        // If no valid movies found, revert
+        revert("No unwatched movies available");
     }
 }
