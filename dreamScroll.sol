@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract StarForge is ERC721, Ownable {
+contract Dreamscroll is ERC721, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _movieIds;
     Counters.Counter private _seriesIds;
@@ -47,7 +47,7 @@ contract StarForge is ERC721, Ownable {
     event MovieLiked(uint256 indexed movieId, address liker);
     event CommentAdded(uint256 indexed movieId, address commenter, string content);
 
-    constructor() ERC721("StarForge", "STAR") Ownable(msg.sender) {}
+    constructor() ERC721("Dreamscroll", "DREAM") Ownable(msg.sender) {}
 
     function createSeries(string memory name) public returns (uint256) {
         uint256 newSeriesId = _seriesIds.current();
