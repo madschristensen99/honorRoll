@@ -8,28 +8,78 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 contract StarForge is ERC721, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _movieIds;
+    Counters.Counter private _seriesIds;
 
     struct Movie {
         string prompt;
         string link;
         address creator;
+        uint256 seriesId;
+        uint256 sequenceNumber;
+        uint256 likes;
+    }
+
+    struct Comment {
+        address commenter;
+        string content;
+        uint256 timestamp;
+    }
+
+    struct Series {
+        string name;
+        address creator;
+        uint256[] movieIds;
+        mapping(uint256 => string[]) userChoices;
+        bool isActive;
     }
 
     mapping(uint256 => Movie) public movies;
+    mapping(uint256 => Series) public series;
+    mapping(address => uint256[]) public creatorMovies;
+    mapping(uint256 => Comment[]) public movieComments;
+    mapping(uint256 => mapping(address => bool)) public hasLiked;
 
-    event MovieCreated(uint256 indexed movieId, address creator, string prompt);
+    event MovieCreated(uint256 indexed movieId, address creator, string prompt, uint256 seriesId, uint256 sequenceNumber);
     event MovieLinkUpdated(uint256 indexed movieId, string newLink);
+    event SeriesCreated(uint256 indexed seriesId, address creator, string name);
+    event UserChoiceMade(uint256 indexed seriesId, uint256 sequenceNumber, string choice);
+    event SeriesEnded(uint256 indexed seriesId);
+    event MovieLiked(uint256 indexed movieId, address liker);
+    event CommentAdded(uint256 indexed movieId, address commenter, string content);
 
     constructor() ERC721("StarForge", "STAR") Ownable(msg.sender) {}
 
-    function createMovie(string memory prompt) public returns (uint256) {
-        _movieIds.increment();
+    function createSeries(string memory name) public returns (uint256) {
+        uint256 newSeriesId = _seriesIds.current();
+        Series storage newSeries = series[newSeriesId];
+        newSeries.name = name;
+        newSeries.creator = msg.sender;
+        newSeries.isActive = true;
+        emit SeriesCreated(newSeriesId, msg.sender, name);
+        _seriesIds.increment();
+        return newSeriesId;
+    }
+
+    function createMovie(string memory prompt, uint256 seriesId) public returns (uint256) {
+        require(seriesId == type(uint256).max || series[seriesId].creator == msg.sender, "Not series creator");
+        require(seriesId == type(uint256).max || series[seriesId].isActive, "Series is not active");
+        
         uint256 newMovieId = _movieIds.current();
+        uint256 sequenceNumber = 0;
+
+        if (seriesId != type(uint256).max) {
+            sequenceNumber = series[seriesId].movieIds.length;
+            series[seriesId].movieIds.push(newMovieId);
+        }
+
         _safeMint(msg.sender, newMovieId);
 
-        movies[newMovieId] = Movie(prompt, "", msg.sender);
-        emit MovieCreated(newMovieId, msg.sender, prompt);
+        movies[newMovieId] = Movie(prompt, "", msg.sender, seriesId, sequenceNumber, 0);
+        creatorMovies[msg.sender].push(newMovieId);
+        
+        emit MovieCreated(newMovieId, msg.sender, prompt, seriesId, sequenceNumber);
 
+        _movieIds.increment();
         return newMovieId;
     }
 
@@ -39,18 +89,73 @@ contract StarForge is ERC721, Ownable {
         emit MovieLinkUpdated(movieId, newLink);
     }
 
-    function getMovie(uint256 movieId) public view returns (string memory, string memory, address) {
-        require(_exists(movieId), "Movie does not exist");
-        Movie storage movie = movies[movieId];
-        return (movie.prompt, movie.link, movie.creator);
+    function makeUserChoice(uint256 seriesId, uint256 sequenceNumber, string memory choice) public {
+        require(series[seriesId].creator == msg.sender, "Not series creator");
+        require(series[seriesId].isActive, "Series is not active");
+        series[seriesId].userChoices[sequenceNumber].push(choice);
+        emit UserChoiceMade(seriesId, sequenceNumber, choice);
     }
 
-    function getAllMovies() public view returns (Movie[] memory) {
-        Movie[] memory allMovies = new Movie[](_movieIds.current());
-        for (uint256 i = 1; i <= _movieIds.current(); i++) {
-            allMovies[i - 1] = movies[i];
-        }
-        return allMovies;
+    function endSeries(uint256 seriesId) public {
+        require(series[seriesId].creator == msg.sender, "Not series creator");
+        require(series[seriesId].isActive, "Series is already ended");
+        series[seriesId].isActive = false;
+        emit SeriesEnded(seriesId);
+    }
+
+    function likeMovie(uint256 movieId) public {
+        require(_exists(movieId), "Movie does not exist");
+        require(!hasLiked[movieId][msg.sender], "Already liked this movie");
+        
+        movies[movieId].likes++;
+        hasLiked[movieId][msg.sender] = true;
+        emit MovieLiked(movieId, msg.sender);
+    }
+
+    function addComment(uint256 movieId, string memory content) public {
+        require(_exists(movieId), "Movie does not exist");
+        require(bytes(content).length > 0, "Comment cannot be empty");
+        
+        Comment memory newComment = Comment({
+            commenter: msg.sender,
+            content: content,
+            timestamp: block.timestamp
+        });
+        
+        movieComments[movieId].push(newComment);
+        emit CommentAdded(movieId, msg.sender, content);
+    }
+
+    function getMovie(uint256 movieId) public view returns (string memory, string memory, address, uint256, uint256, uint256) {
+        require(_exists(movieId), "Movie does not exist");
+        Movie storage movie = movies[movieId];
+        return (movie.prompt, movie.link, movie.creator, movie.seriesId, movie.sequenceNumber, movie.likes);
+    }
+
+    function getSeriesMovies(uint256 seriesId) public view returns (uint256[] memory) {
+        return series[seriesId].movieIds;
+    }
+
+    function getUserChoices(uint256 seriesId, uint256 sequenceNumber) public view returns (string[] memory) {
+        return series[seriesId].userChoices[sequenceNumber];
+    }
+
+    function getCreatorMovies(address creator) public view returns (uint256[] memory) {
+        return creatorMovies[creator];
+    }
+
+    function isSeriesActive(uint256 seriesId) public view returns (bool) {
+        return series[seriesId].isActive;
+    }
+
+    function getMovieLikes(uint256 movieId) public view returns (uint256) {
+        require(_exists(movieId), "Movie does not exist");
+        return movies[movieId].likes;
+    }
+
+    function getMovieComments(uint256 movieId) public view returns (Comment[] memory) {
+        require(_exists(movieId), "Movie does not exist");
+        return movieComments[movieId];
     }
 
     function _exists(uint256 tokenId) internal view override returns (bool) {
