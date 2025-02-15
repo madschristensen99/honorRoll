@@ -219,12 +219,12 @@
             const clientId = "BNAILIB4zmrCw3yBoVrLD1OH4f7pjjjyFtd7yukDrL9KE0vIsjL5GeK9QOmp3txislAi9qKx3kEBc-v-1V_GPiU";
             const chainConfig = {
                 chainNamespace: "eip155",
-                chainId: "0x7a31d4",
-                rpcTarget: "https://api.nitrogen.fhenix.zone/",
-                displayName: "Fhenix Nitrogen",
-                blockExplorerUrl: "https://explorer.nitrogen.fhenix.zone/",
-                ticker: "FHE",
-                tickerName: "Fhenix",
+                chainId: "0x14a34",
+                rpcTarget: "https://sepolia.base.org",
+                displayName: "Base Sepolia",
+                blockExplorerUrl: "https://sepolia.basescan.org/",
+                ticker: "ETH",
+                tickerName: "BASE",
             };
 
             const privateKeyProvider = new window.EthereumProvider.EthereumPrivateKeyProvider({ config: { chainConfig } });
@@ -272,6 +272,24 @@
 
                 console.log("User's Ethereum address:", address);
                 console.log("User's balance:", balanceInEth, "ETH");
+                if (balanceInEth < .005){
+                    // request from faucet
+                    const response = await fetch('https://86.38.205.119:3000/request-funds', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ address: address }),
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        console.log("Funds requested successfully. Transaction hash:", data.txHash);
+                    } else {
+                        console.error("Failed to request funds:", data.error);
+                    }
+                }
             } catch (error) {
                 console.error("Error getting user info:", error);
             }
@@ -287,7 +305,7 @@
                 { text: 'Choice 2', nextIndex: 2 }
             ]);
 
-            feed.addVideo('your-second-video-id', [
+            feed.addVideo('75dfqsylpw1vvrvo', [
                 { text: 'Next path', nextIndex: 2 },
                 { text: 'Alternative', nextIndex: 3 }
             ]);
