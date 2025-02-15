@@ -27,7 +27,7 @@ const story_provider = new ethers.providers.JsonRpcProvider(STORY_RPC_URL, STORY
 const story_signer = ethers.Wallet.fromMnemonic(mnemonic).connect(story_provider);
 const storyContract = new ethers.Contract(STORY_CONTRACT_ADDRESS, STORY_CONTRACT_ABI, story_signer);
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 20;
 const RETRY_DELAY = 5000; // 5 seconds
 
 async function generateAIImage(prompt, retryCount = 0) {
@@ -220,27 +220,23 @@ function adjustVideoDuration(inputPath, outputPath, targetDuration) {
 }
 
 async function generateMovieScene(sceneData) {
-  const videoPaths = [];
-  const audioPaths = [];
-  
-  for (let i = 0; i < sceneData.length; i++) {
-    console.log(`Processing scene ${i + 1}/${sceneData.length}...`);
-    
-    // Generate image and video
-    const aiImageResult = await generateAIImage(sceneData[i].prompt);
-    const aiImageUrl = aiImageResult.images[0].url;
-    const aiImagePath = `ai_generated_image_${i}.png`;
-    await downloadAIImage(aiImageUrl, aiImagePath);
-    console.log(`Image ${i + 1} downloaded successfully`);
+  console.log('Starting parallel processing of scenes...');
 
-    const videoPath = await generateVideoFromImage(aiImagePath, sceneData[i].duration);
-    videoPaths.push(videoPath);
-    console.log(`Video ${i + 1} generated successfully`);
+  const generateSceneContent = async (scene, index) => {
+    console.log(`Processing scene ${index + 1}/${sceneData.length}...`);
+
+    // Generate image and video
+    const aiImageResult = await generateAIImage(scene.prompt);
+    const aiImageUrl = aiImageResult.images[0].url;
+    const aiImagePath = `ai_generated_image_${index}.png`;
+    await downloadAIImage(aiImageUrl, aiImagePath);
+    console.log(`Image ${index + 1} downloaded successfully`);
+    const videoPath = await generateVideoFromImage(aiImagePath, scene.duration);
+    console.log(`Video ${index + 1} generated successfully`);
 
     // Generate audio (dialogue and sound effect)
-    const audioPath = await generateSceneAudio(sceneData[i]);
-    audioPaths.push(audioPath);
-    console.log(`Audio ${i + 1} generated successfully`);
+    const audioPath = await generateSceneAudio(scene);
+    console.log(`Audio ${index + 1} generated successfully`);
 
     // Clean up the image file
     try {
@@ -248,7 +244,16 @@ async function generateMovieScene(sceneData) {
     } catch (error) {
       console.error(`Error deleting image file ${aiImagePath}:`, error);
     }
-  }
+
+    return { videoPath, audioPath };
+  };
+
+  const sceneResults = await Promise.all(
+    sceneData.map((scene, index) => generateSceneContent(scene, index))
+  );
+
+  const videoPaths = sceneResults.map(result => result.videoPath);
+  const audioPaths = sceneResults.map(result => result.audioPath);
 
   console.log('Creating final video from generated videos and audios...');
   const finalVideoPath = 'movie_scene.mp4';
@@ -256,7 +261,6 @@ async function generateMovieScene(sceneData) {
 
   console.log('Uploading video to Livepeer...');
   const playbackUrl = await uploadVideoToLivepeer(finalVideoPath);
-
   console.log('Movie scene generated and uploaded successfully!');
   console.log('You can view your video at:', playbackUrl);
 
@@ -319,11 +323,11 @@ async function combineAudioFiles(dialoguePath, soundEffectPath, outputPath) {
   let command;
   
   if (dialoguePath) {
-    // If we have both audio files, mix them
-    command = `ffmpeg -i ${dialoguePath} -i ${soundEffectPath} -filter_complex "[0:a][1:a]amix=inputs=2:duration=longest" -c:a libmp3lame ${outputPath}`;
+    // If we have both audio files, mix them with adjusted volumes
+    command = `ffmpeg -i ${dialoguePath} -i ${soundEffectPath} -filter_complex "[0:a]volume=2.0[dialogue];[1:a]volume=0.75[sfx];[dialogue][sfx]amix=inputs=2:duration=longest" -c:a libmp3lame ${outputPath}`;
   } else {
-    // If we only have sound effect, just copy it
-    command = `ffmpeg -i ${soundEffectPath} -c:a libmp3lame ${outputPath}`;
+    // If we only have sound effect, just copy it with reduced volume
+    command = `ffmpeg -i ${soundEffectPath} -filter:a "volume=0.75" -c:a libmp3lame ${outputPath}`;
   }
   
   return new Promise((resolve, reject) => {
@@ -562,11 +566,11 @@ async function generateVideoFromImage(imagePath, duration, retryCount = 0) {
 }
 
 async function getFormattedSceneData(userInput) {
-  const basePrompt = `Create a movie scene based on the following user input: ${userInput}`;
+  const basePrompt = `Generate a short-form, engaging video scene (12.0-30.0 seconds) based on the following user input: ${userInput}. The scene should feature a charismatic, relatable persona, with a strong hook in the first few seconds and vibrant visuals. Focus on fast-paced, original content like entertaining skits, quick tips, or relatable stories, and include trending-style audio and effects. Ensure the tone is authentic and visually stimulating, designed to grab attention instantly and encourage viewer interaction without being cringe, "How do you do fellow kids", or "HAPPENING!!!"/clickbait. Keep dialouge terse and snappy, and avoid using character names in your prompts. DO NOT assume the prompts have consistency between each other, each prompt NEEDS to stand alone but also fit within the conext of the whole script to have story flow. UNDER NO CIRCUMASTANCE SIMPLY COPY THE EXAMPLE OR BE UNCREATIVE`;
   const formattingInstructions = `
     Format your response as a JSON array of scene objects. Each scene object should have the following properties:
     - startTime: number (in seconds)
-    - duration: number (in seconds, keep this number between 3-5)
+    - duration: number (in seconds, keep this number between 1.0-4.0)
     - prompt: string (description of the scene including the actor name if you want to show a person) Make sure in each clip to include full and consistent descriptions because using generalities, definite article, and referencing context of other prompts is useless. You are generating an image with your prompt, so focus on what you want the image and shot to be for each prompt, clear and detailed.
     - soundEffect: string (description of the sound effect for the scene)
     - dialogue: object with properties:
@@ -577,22 +581,42 @@ async function getFormattedSceneData(userInput) {
     [
       {
         "startTime": 0,
-        "duration": 5,
-        "prompt": "A black starship emerging from hyperspace",
-        "soundEffect": "Loud whoosh of a spaceship exiting hyperspace",
+        "duration": 2.8,
+        "prompt": "A young woman sitting at a coffee shop, looking frustrated as she stares at her laptop screen",
+        "soundEffect": "Soft café background noise with light chatter and coffee machine sounds",
         "dialogue": {
-          "description": "A deep voice booms loudly",
-          "text": "Prepare for arrival!"
+          "description": "A relatable, slightly exasperated female voice",
+          "text": "Why is this code not working? I've been at it for hours!"
         }
       },
       {
-        "startTime": 5,
-        "duration": 7,
-        "prompt": "A caped superhero Henry Cavill flying toward a black starship that has emerged from hyperspace",
-        "soundEffect": "Whooshing air as the superhero flies",
+        "startTime": 2.8,
+        "duration": 4.2,
+        "prompt": "Male friend sliding into the seat across from her with a playful smirk, holding a cup of coffee",
+        "soundEffect": "Chair scraping and a light thud as the coffee cup is placed on the table",
         "dialogue": {
-          "description": "A male, heroic voice speaking with confidence",
-          "text": "I'm coming to save you!"
+          "description": "A cheerful, teasing male voice",
+          "text": "Maybe you forgot a semicolon again?"
+        }
+      },
+      {
+        "startTime": 7.0,
+        "duration": 3.5,
+        "prompt": "Young woman rolling her eyes but smiling as she takes a sip of her coffee, the camera zooming in on her face",
+        "soundEffect": "Light laughter and a sip sound",
+        "dialogue": {
+          "description": "Female voice, now amused",
+          "text": "Okay, okay, you got me. But seriously, help me out here!"
+        }
+      },
+      {
+        "startTime": 10.5,
+        "duration": 4.1,
+        "prompt": "Man leaning over the laptop, typing quickly as young woman watches in awe, the screen now showing a working code snippet",
+        "soundEffect": "Keyboard typing sounds and a triumphant 'ding' sound effect",
+        "dialogue": {
+          "description": "Male voice, confident and slightly smug",
+          "text": "There you go. Next time, just call me sooner!"
         }
       }
     ]
