@@ -14,6 +14,7 @@ contract Dreamscroll is ERC721, Ownable {
         string prompt;
         string link;
         address creator;
+        address producer;
         uint256 seriesId;
         uint256 sequenceNumber;
         uint256 likes;
@@ -28,6 +29,7 @@ contract Dreamscroll is ERC721, Ownable {
     struct Series {
         string name;
         address creator;
+        address producer;
         uint256[] movieIds;
         mapping(uint256 => string[]) userChoices;
         bool isActive;
@@ -39,7 +41,7 @@ contract Dreamscroll is ERC721, Ownable {
     mapping(uint256 => Comment[]) public movieComments;
     mapping(uint256 => mapping(address => bool)) public hasLiked;
     
-    // New mappings for video tracking
+    // Video tracking mappings
     mapping(address => uint256[]) public videosSeenByUser;
     mapping(address => mapping(uint256 => bool)) public hasSeenVideo;
 
@@ -51,6 +53,7 @@ contract Dreamscroll is ERC721, Ownable {
     event MovieLiked(uint256 indexed movieId, address liker);
     event CommentAdded(uint256 indexed movieId, address commenter, string content);
     event VideoSeen(uint256 indexed movieId, address viewer);
+    event ProducerAssigned(uint256 indexed movieId, address producer);
 
     constructor() ERC721("Dreamscroll", "DREAM") Ownable(msg.sender) {}
 
@@ -59,6 +62,7 @@ contract Dreamscroll is ERC721, Ownable {
         Series storage newSeries = series[newSeriesId];
         newSeries.name = name;
         newSeries.creator = msg.sender;
+        newSeries.producer = address(0);
         newSeries.isActive = true;
         emit SeriesCreated(newSeriesId, msg.sender, name);
         _seriesIds.increment();
@@ -79,7 +83,7 @@ contract Dreamscroll is ERC721, Ownable {
 
         _safeMint(msg.sender, newMovieId);
 
-        movies[newMovieId] = Movie(prompt, "", msg.sender, seriesId, sequenceNumber, 0);
+        movies[newMovieId] = Movie(prompt, "", msg.sender, address(0), seriesId, sequenceNumber, 0);
         creatorMovies[msg.sender].push(newMovieId);
         
         emit MovieCreated(newMovieId, msg.sender, prompt, seriesId, sequenceNumber);
@@ -88,10 +92,18 @@ contract Dreamscroll is ERC721, Ownable {
         return newMovieId;
     }
 
-    function updateMovieLink(uint256 movieId, string memory newLink) public onlyOwner {
+    function updateMovieLink(uint256 movieId, string memory newLink) public {
         require(_exists(movieId), "Movie does not exist");
         movies[movieId].link = newLink;
+        movies[movieId].producer = msg.sender;
+        
+        uint256 seriesId = movies[movieId].seriesId;
+        if (seriesId != type(uint256).max) {
+            series[seriesId].producer = msg.sender;
+        }
+        
         emit MovieLinkUpdated(movieId, newLink);
+        emit ProducerAssigned(movieId, msg.sender);
     }
 
     function makeUserChoice(uint256 seriesId, string memory choice, uint256 sequenceNumber) public {
@@ -112,7 +124,7 @@ contract Dreamscroll is ERC721, Ownable {
     }
 
     function endSeries(uint256 seriesId) public {
-        require(series[seriesId].creator == msg.sender, "Not series creator");
+        require(series[seriesId].creator == msg.sender || series[seriesId].producer == msg.sender, "Not authorized to end series");
         require(series[seriesId].isActive, "Series is already ended");
         series[seriesId].isActive = false;
         emit SeriesEnded(seriesId);
@@ -141,10 +153,10 @@ contract Dreamscroll is ERC721, Ownable {
         emit CommentAdded(movieId, msg.sender, content);
     }
 
-    function getMovie(uint256 movieId) public view returns (string memory, string memory, address, uint256, uint256, uint256) {
+    function getMovie(uint256 movieId) public view returns (string memory, string memory, address, address, uint256, uint256, uint256) {
         require(_exists(movieId), "Movie does not exist");
         Movie storage movie = movies[movieId];
-        return (movie.prompt, movie.link, movie.creator, movie.seriesId, movie.sequenceNumber, movie.likes);
+        return (movie.prompt, movie.link, movie.creator, movie.producer, movie.seriesId, movie.sequenceNumber, movie.likes);
     }
 
     function getSeriesMovies(uint256 seriesId) public view returns (uint256[] memory) {
@@ -173,7 +185,6 @@ contract Dreamscroll is ERC721, Ownable {
         return movieComments[movieId];
     }
 
-    // New function to mark a video as seen by a user
     function markVideoAsSeen(uint256 movieId) public {
         require(_exists(movieId), "Movie does not exist");
         require(!hasSeenVideo[msg.sender][movieId], "Video already marked as seen");
@@ -183,12 +194,10 @@ contract Dreamscroll is ERC721, Ownable {
         emit VideoSeen(movieId, msg.sender);
     }
 
-    // New function to get all videos seen by a user
     function getVideosSeenByUser(address user) public view returns (uint256[] memory) {
         return videosSeenByUser[user];
     }
 
-    // New function to check if a user has seen a specific video
     function hasUserSeenVideo(address user, uint256 movieId) public view returns (bool) {
         return hasSeenVideo[user][movieId];
     }
