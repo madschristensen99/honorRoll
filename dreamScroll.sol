@@ -89,9 +89,21 @@ contract Dreamscroll is ERC721, Ownable {
         emit MovieLinkUpdated(movieId, newLink);
     }
 
-    function makeUserChoice(uint256 seriesId, uint256 sequenceNumber, string memory choice) public {
+    function makeUserChoice(uint256 seriesId, string memory choice, uint256 sequenceNumber) public {
         require(series[seriesId].creator == msg.sender, "Not series creator");
         require(series[seriesId].isActive, "Series is not active");
+        require(series[seriesId].movieIds.length > 0, "No movies in the series");
+
+        uint256 latestSequenceNumber = series[seriesId].movieIds.length - 1;
+    
+        // If sequenceNumber is not provided (i.e., it's the default value 0 and not the first episode),
+        // use the latest sequence number
+        if (sequenceNumber == 0 && latestSequenceNumber > 0) {
+            sequenceNumber = latestSequenceNumber;
+        }
+
+        require(sequenceNumber <= latestSequenceNumber, "Invalid sequence number");
+
         series[seriesId].userChoices[sequenceNumber].push(choice);
         emit UserChoiceMade(seriesId, sequenceNumber, choice);
     }
