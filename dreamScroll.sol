@@ -38,6 +38,10 @@ contract Dreamscroll is ERC721, Ownable {
     mapping(address => uint256[]) public creatorMovies;
     mapping(uint256 => Comment[]) public movieComments;
     mapping(uint256 => mapping(address => bool)) public hasLiked;
+    
+    // New mappings for video tracking
+    mapping(address => uint256[]) public videosSeenByUser;
+    mapping(address => mapping(uint256 => bool)) public hasSeenVideo;
 
     event MovieCreated(uint256 indexed movieId, address creator, string prompt, uint256 seriesId, uint256 sequenceNumber);
     event MovieLinkUpdated(uint256 indexed movieId, string newLink);
@@ -46,6 +50,7 @@ contract Dreamscroll is ERC721, Ownable {
     event SeriesEnded(uint256 indexed seriesId);
     event MovieLiked(uint256 indexed movieId, address liker);
     event CommentAdded(uint256 indexed movieId, address commenter, string content);
+    event VideoSeen(uint256 indexed movieId, address viewer);
 
     constructor() ERC721("Dreamscroll", "DREAM") Ownable(msg.sender) {}
 
@@ -96,8 +101,6 @@ contract Dreamscroll is ERC721, Ownable {
 
         uint256 latestSequenceNumber = series[seriesId].movieIds.length - 1;
     
-        // If sequenceNumber is not provided (i.e., it's the default value 0 and not the first episode),
-        // use the latest sequence number
         if (sequenceNumber == 0 && latestSequenceNumber > 0) {
             sequenceNumber = latestSequenceNumber;
         }
@@ -168,6 +171,26 @@ contract Dreamscroll is ERC721, Ownable {
     function getMovieComments(uint256 movieId) public view returns (Comment[] memory) {
         require(_exists(movieId), "Movie does not exist");
         return movieComments[movieId];
+    }
+
+    // New function to mark a video as seen by a user
+    function markVideoAsSeen(uint256 movieId) public {
+        require(_exists(movieId), "Movie does not exist");
+        require(!hasSeenVideo[msg.sender][movieId], "Video already marked as seen");
+
+        videosSeenByUser[msg.sender].push(movieId);
+        hasSeenVideo[msg.sender][movieId] = true;
+        emit VideoSeen(movieId, msg.sender);
+    }
+
+    // New function to get all videos seen by a user
+    function getVideosSeenByUser(address user) public view returns (uint256[] memory) {
+        return videosSeenByUser[user];
+    }
+
+    // New function to check if a user has seen a specific video
+    function hasUserSeenVideo(address user, uint256 movieId) public view returns (bool) {
+        return hasSeenVideo[user][movieId];
     }
 
     function _exists(uint256 tokenId) internal view override returns (bool) {
