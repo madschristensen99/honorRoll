@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+
+        .feed {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            -webkit-overflow-scrolling: touch;
+            display: none; /* Hidden by default until auth */
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            background: #000;
+        }
+
+        .video-iframe {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .video-overlay {
+            position: absolute;
+            bottom: 80px;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .choice-button {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            padding: 16px 24px;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            text-align: center;
+            transition: all 0.2s;
+            touch-action: manipulation;
+        }
+
+        .choice-button:active {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(0.98);
+        }
+
+        /* Auth UI */
+        .auth-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            z-index: 1000;
+        }
+
+        .auth-button {
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+            border: none;
+            border-radius: 50px;
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-button:hover {
+            background: #fff;
+            transform: scale(1.02);
+        }
+
+        .user-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: none;
+        }
+
+        .logout-button {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container" id="authContainer">
+        <button id="login" class="auth-button">Connect Account</button>
+    </div>
+
+    <div class="user-controls" id="userControls">
+        <button id="logout" class="logout-button">Disconnect</button>
+    </div>
+
+    <div class="feed" id="feed"></div>
+
+    <!-- Web3Auth Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@web3auth/modal@9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@web3auth/wallet-services-plugin@9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@web3auth/ethereum-provider@9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@4.1.1/dist/web3.min.js"></script>
+
+    <script>
+        let web3auth = null;
+        let walletServicesPlugin = null;
+
+        class VideoFeed {
+            constructor() {
+                this.feed = document.getElementById('feed');
+                this.videos = [];
+                this.setupIntersectionObserver();
+            }
+
+            setupIntersectionObserver() {
+                const options = {
+                    root: null,
+                    threshold: 0.5
+                };
+
+                this.observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const iframe = entry.target.querySelector('iframe');
+                        if (entry.isIntersecting) {
+                            iframe.contentWindow.postMessage({ type: 'play' }, '*');
+                        } else {
+                            iframe.contentWindow.postMessage({ type: 'pause' }, '*');
+                        }
+                    });
+                }, options);
+            }
+
+            addVideo(videoId, choices = []) {
+                const container = document.createElement('div');
+                container.className = 'video-container';
+
+                const iframe = document.createElement('iframe');
+                iframe.className = 'video-iframe';
+                iframe.src = `https://lvpr.tv?v=${videoId}`;
+                iframe.allowFullscreen = true;
+                iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+                iframe.sandbox = 'allow-same-origin allow-scripts';
+
+                const overlay = document.createElement('div');
+                overlay.className = 'video-overlay';
+
+                choices.forEach(choice => {
+                    const button = document.createElement('button');
+                    button.className = 'choice-button';
+                    button.textContent = choice.text;
+                    button.addEventListener('click', () => this.handleChoice(choice.nextIndex));
+                    overlay.appendChild(button);
+                });
+
+                container.appendChild(iframe);
+                container.appendChild(overlay);
+                
+                this.feed.appendChild(container);
+                this.observer.observe(container);
+                this.videos.push({ element: container, iframe });
+            }
+
+            handleChoice(index) {
+                const targetVideo = this.videos[index]?.element;
+                if (targetVideo) {
+                    targetVideo.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+        }
+
+        // Initialize Web3Auth
+        async function initWeb3Auth() {
+            const clientId = "BNAILIB4zmrCw3yBoVrLD1OH4f7pjjjyFtd7yukDrL9KE0vIsjL5GeK9QOmp3txislAi9qKx3kEBc-v-1V_GPiU";
+            const chainConfig = {
+                chainNamespace: "eip155",
+                chainId: "0x14a34",
+                rpcTarget: "https://sepolia.base.org",
+                displayName: "Base Sepolia",
+                blockExplorerUrl: "https://sepolia.basescan.org/",
+                ticker: "ETH",
+                tickerName: "BASE",
+            };
+
+            const privateKeyProvider = new window.EthereumProvider.EthereumPrivateKeyProvider({ config: { chainConfig } });
+            web3auth = new window.Modal.Web3Auth({
+                clientId,
+                privateKeyProvider,
+                web3AuthNetwork: "sapphire_devnet",
+            });
+
+            walletServicesPlugin = new window.WalletServicesPlugin.WalletServicesPlugin();
+            web3auth.addPlugin(walletServicesPlugin);
+            
+            await web3auth.initModal();
+
+            // Check if user is already logged in
+            if (web3auth.connected) {
+                showFeed();
+            }
+        }
+
+        function showFeed() {
+            document.getElementById('authContainer').style.display = 'none';
+            document.getElementById('userControls').style.display = 'block';
+            document.getElementById('feed').style.display = 'block';
+        }
+
+        function hideFeed() {
+            document.getElementById('authContainer').style.display = 'flex';
+            document.getElementById('userControls').style.display = 'none';
+            document.getElementById('feed').style.display = 'none';
+        }
+        // retrieves user info
+        async function getUserInfo() {
+            if (!web3auth.connected) {
+                console.log("User is not connected");
+                return;
+            }
+
+            try {
+                const web3 = new Web3(web3auth.provider);
+                const accounts = await web3.eth.getAccounts();
+                const address = accounts[0];
+                const balance = await web3.eth.getBalance(address);
+                const balanceInEth = web3.utils.fromWei(balance, 'ether');
+
+                console.log("User's Ethereum address:", address);
+                console.log("User's balance:", balanceInEth, "ETH");
+                if (balanceInEth < .005){
+                    // request from faucet
+                    const response = await fetch('https://86.38.205.119:3000/request-funds', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ address: address }),
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        console.log("Funds requested successfully. Transaction hash:", data.txHash);
+                    } else {
+                        console.error("Failed to request funds:", data.error);
+                    }
+                }
+            } catch (error) {
+                console.error("Error getting user info:", error);
+            }
+        }
+        // Initialize everything
+        async function init() {
+            await initWeb3Auth();
+            const feed = new VideoFeed();
+
+            // Add your videos
+            feed.addVideo('b3e27azc9hm9f8ec', [
+                { text: 'Choice 1', nextIndex: 1 },
+                { text: 'Choice 2', nextIndex: 2 }
+            ]);
+
+            feed.addVideo('75dfqsylpw1vvrvo', [
+                { text: 'Next path', nextIndex: 2 },
+                { text: 'Alternative', nextIndex: 3 }
+            ]);
+
+        // Modify your login event listener to include this
+        document.getElementById('login').addEventListener('click', async () => {
+            try {
+                await web3auth.connect();
+                await getUserInfo(); // Add this line
+                showFeed();
+            } catch (error) {
+                console.error("Error logging in:", error);
+            }
+        });
+            document.getElementById('logout').addEventListener('click', async () => {
+                try {
+                    await web3auth.logout();
+                    hideFeed();
+                } catch (error) {
+                    console.error("Error logging out:", error);
+                }
+            });
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>
