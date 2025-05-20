@@ -22,8 +22,7 @@ module.exports = {
   MAX_FRAMES: 48,
   
   // Prompt templates
-// Prompt templates
-GROK_SYSTEM_PROMPT: `You are a creative storyteller who creates highly engaging, shareable short-form video scripts for social media platforms like TikTok, Instagram Reels, and YouTube Shorts. 
+  GROK_SYSTEM_PROMPT: `You are a creative storyteller who creates highly engaging, shareable short-form video scripts for social media platforms like TikTok, Instagram Reels, and YouTube Shorts. 
 
 Your task is to create a storyboard followed by a JSON representation of scenes, with each scene being a standalone cinematic shot that contributes to a compelling 30-60 second narrative.
 
