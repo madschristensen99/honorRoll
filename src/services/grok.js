@@ -12,8 +12,7 @@ async function generateStoryPrompt(prompt) {
     console.log('Calling Grok API...');
     
     if (!config.GROK_API_KEY) {
-      console.warn('GROK_API_KEY is not set. Using fallback response.');
-      return generateFallbackResponse(prompt);
+      throw new Error('GROK_API_KEY is not set. Cannot proceed without API key.');
     }
     
     // Create a custom axios instance with SSL verification disabled
@@ -36,9 +35,9 @@ async function generateStoryPrompt(prompt) {
             content: `${prompt}\n\n${config.GROK_FORMATTING_INSTRUCTIONS}`
           }
         ],
-        temperature: 0.7,
+        temperature: 1.2,
         top_p: 0.9,
-        max_tokens: 1000
+        max_tokens: 20000  // Increased from 1000 to 4000 to handle larger responses
       },
       {
         headers: {
@@ -54,8 +53,14 @@ async function generateStoryPrompt(prompt) {
     // Extract the JSON part from the response
     const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const jsonData = JSON.parse(jsonMatch[0]);
-      return jsonData;
+      try {
+        const jsonData = JSON.parse(jsonMatch[0]);
+        return jsonData;
+      } catch (parseError) {
+        console.error('JSON parsing error:', parseError.message);
+        console.error('JSON content that failed to parse:', jsonMatch[0]);
+        throw new Error(`Failed to parse JSON from Grok API response: ${parseError.message}`);
+      }
     } else {
       throw new Error('Could not extract JSON from Grok API response');
     }
@@ -66,59 +71,12 @@ async function generateStoryPrompt(prompt) {
       console.error('Response data:', error.response.data);
     }
     
-    console.warn('Using fallback response due to API error.');
-    return generateFallbackResponse(prompt);
+    // No fallback - propagate the error
+    throw error;
   }
 }
 
-/**
- * Generate a fallback response when Grok API is unavailable
- * @param {string} prompt - Initial prompt
- * @returns {object} - Fallback story data
- */
-function generateFallbackResponse(prompt) {
-  console.log('Generating fallback response for prompt:', prompt);
-  
-  // A simple fallback response with a basic story structure
-  return {
-    scenes: [
-      {
-        startTime: 0.0,
-        duration: 3.0,
-        prompt: "A person walks into a room, looking confused and disoriented.",
-        soundEffect: "Footsteps and door creaking",
-        dialogue: {
-          description: "Narrator, calm and mysterious",
-          text: "Sometimes, the most unexpected journeys begin with a single step."
-        }
-      },
-      {
-        startTime: 3.0,
-        duration: 2.5,
-        prompt: "The person discovers a glowing object on a table in the center of the room.",
-        soundEffect: "Soft humming and magical twinkling",
-        dialogue: {
-          description: "Person, surprised and curious",
-          text: "What is this strange thing? It seems to be calling to me..."
-        }
-      },
-      {
-        startTime: 5.5,
-        duration: 2.5,
-        prompt: "As they reach for the object, it floats up and begins to spin slowly in the air.",
-        soundEffect: "Rising tone and whooshing air",
-        dialogue: {
-          description: "Person, amazed and slightly afraid",
-          text: "It's... it's moving on its own! This can't be happening!"
-        }
-      }
-    ],
-    choices: [
-      "The person decides to touch the floating object, triggering a magical transformation.",
-      "The person backs away cautiously, looking for a way to escape the strange room."
-    ]
-  };
-}
+// Fallback response has been removed as requested
 
 module.exports = {
   generateStoryPrompt
