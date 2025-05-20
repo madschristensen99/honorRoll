@@ -24,7 +24,7 @@ async function generateStoryPrompt(prompt) {
     const response = await axios.post(
       config.GROK_API_URL,
       {
-        model: 'grok-2',
+        model: 'grok-3',
         messages: [
           {
             role: 'system',
