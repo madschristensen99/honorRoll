@@ -59,6 +59,11 @@ The script will:
 4. Combine everything into a final video with synchronized audio
 5. Output a playback URL for the finished movie
 
+### Example
+
+Here's an example of a generated movie with the prompt "A space adventure with aliens":
+[https://lvpr.tv/?v=76c6ics4llskc776](https://lvpr.tv/?v=76c6ics4llskc776)
+
 ## Dependencies
 
 - `@fal-ai/client`: For text-to-video generation
