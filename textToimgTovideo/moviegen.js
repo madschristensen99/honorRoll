@@ -4,87 +4,86 @@ const { exec } = require('child_process');
 const tus = require('tus-js-client');
 const FormData = require('form-data');
 const dotenv = require('dotenv');
-
-const { ElevenLabsClient, ElevenLabs } = require("elevenlabs");
 const path = require('path');
-const { fal } = require('@fal-ai/client');
 
-const { API_URL, AI_API_URL } = require('./constants');
+// Define constants for API endpoints
+const API_URL = 'https://livepeer.studio/api';
+const AI_API_URL = 'https://dream-gateway.livepeer.cloud/text-to-image';
+const IMG_TO_VIDEO_URL = 'https://dream-gateway.livepeer.cloud/image-to-video';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from parent directory
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// Get API key from environment variables
 const API_KEY = process.env.LIVEPEER_API_KEY;
-const client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
+if (!API_KEY) {
+  console.error('LIVEPEER_API_KEY is required in .env file');
+}
 
-// Initialize fal.ai client with credentials
-fal.config({
-  credentials: process.env.FAL_AI_KEY
-});
+// Try to initialize ElevenLabs client if available
+let client = null;
+try {
+  const { ElevenLabsClient } = require("elevenlabs");
+  if (process.env.ELEVENLABS_API_KEY) {
+    client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
+    console.log('ElevenLabs client initialized successfully');
+  } else {
+    console.warn('ElevenLabs API key not found in environment variables');
+  }
+} catch (error) {
+  console.warn('ElevenLabs package not available, sound effects will be limited');
+}
 
-const MAX_RETRIES = 250;
+const MAX_RETRIES = 25; // Reduced from 250 for more reasonable retry behavior
 const RETRY_DELAY = 5000; // 5 seconds
 
-// New function to generate video directly from text using fal.ai
+// Function to generate video from text using Livepeer's text-to-image and image-to-video APIs
 async function generateVideoFromText(prompt, duration, retryCount = 0) {
   try {
-    console.log('Calling fal.ai text-to-video API...');
+    console.log('Using Livepeer text-to-image-to-video pipeline...');
     
-    // Calculate num_frames based on duration (assuming 24fps)
-    const fps = 24;
-    const numFrames = Math.min(Math.ceil(duration * fps), 48); // fal.ai max is 48 frames
+    // Step 1: Generate an image from the text prompt
+    console.log(`Generating image from prompt: ${prompt}`);
     
     // Add portrait orientation hints to the prompt
-    const enhancedPrompt = `${prompt} (vertical format, portrait orientation)`;
-    console.log(`Using portrait-enhanced prompt: ${enhancedPrompt}`);
+    const enhancedPrompt = `${prompt} (vertical format, portrait orientation, 9:16 aspect ratio)`;
     
-    // Go back to the original working model and parameters
-    // But use portrait dimensions (width < height)
-    console.log('Generating portrait video with dimensions 512x768');
+    // Call the text-to-image API
+    const imageResult = await generateAIImage(enhancedPrompt);
     
-    // Use the model that we know works, but with portrait dimensions
-    const result = await fal.run('fal-ai/fast-svd/text-to-video', {
-      input: {
-        prompt: enhancedPrompt,
-        negative_prompt: 'poor quality, distortion, low resolution, blurry, text, watermark, landscape orientation, wide format',
-        num_frames: numFrames,
-        width: 512,     // Width smaller than height for portrait
-        height: 768,    // Height larger than width for portrait
-        guidance_scale: 7.5,
-        num_inference_steps: 25,
-        fps: fps
-      }
-    });
-    
-    console.log('Video generation parameters:', {
-      prompt: enhancedPrompt,
-      dimensions: '512x768', // Portrait dimensions
-      fps: fps,
-      duration: duration,
-      frames: numFrames
-    });
-    
-    // Log the full response for debugging
-    console.log('Full API response:', JSON.stringify(result, null, 2));
-    
-    console.log('Video generated successfully from fal.ai');
-    console.log('Result data:', result);
-    
-    // Extract the video URL from the response
-    if (result && result.data && result.data.video && result.data.video.url) {
-      return result.data.video.url; // Standard video output format from fal.ai
-    } else if (result && result.video && result.video.url) {
-      return result.video.url; // Alternative video output format
-    } else if (result && result.images && result.images.length > 0) {
-      return result.images[0].url; // For image output
-    } else if (result && result.output && result.output.video) {
-      return result.output.video; // Alternative video output structure
-    } else {
-      console.error('Unexpected response structure from fal.ai:', JSON.stringify(result, null, 2));
-      throw new Error('Could not extract video URL from fal.ai response');
+    if (!imageResult || !imageResult.images || !imageResult.images[0] || !imageResult.images[0].url) {
+      throw new Error('Failed to generate image from text');
     }
+    
+    const imageUrl = imageResult.images[0].url;
+    console.log(`Image generated successfully: ${imageUrl}`);
+    
+    // Step 2: Download the generated image
+    const imagePath = `temp_image_${Date.now()}.png`;
+    await downloadAIImage(imageUrl, imagePath);
+    
+    if (!fs.existsSync(imagePath)) {
+      throw new Error(`Failed to download image to ${imagePath}`);
+    }
+    
+    console.log(`Image downloaded to ${imagePath}`);
+    
+    // Step 3: Convert the image to a video with the specified duration
+    console.log(`Converting image to video with duration: ${duration}s`);
+    const videoPath = await generateVideoFromImage(imagePath, duration);
+    
+    // Clean up the temporary image file
+    try {
+      fs.unlinkSync(imagePath);
+      console.log(`Deleted temporary image file: ${imagePath}`);
+    } catch (unlinkError) {
+      console.error(`Error deleting temporary image file: ${unlinkError.message}`);
+    }
+    
+    console.log(`Video generated successfully at ${videoPath}`);
+    return videoPath;
   } catch (error) {
-    console.error(`Error generating video from text (attempt ${retryCount + 1}):`, error.message);
+    console.error(`Error in text-to-image-to-video pipeline (attempt ${retryCount + 1}):`, error.message);
     
     if (retryCount < MAX_RETRIES) {
       console.log(`Retrying in ${RETRY_DELAY / 1000} seconds...`);
@@ -167,7 +166,7 @@ async function generateAIImage(prompt, retryCount = 0) {
         'Content-Type': 'application/json'
       },
       data: {
-        model_id: "SG161222/RealVisXL_V4.0_Lightning",
+        model_id: "ByteDance/SDXL-Lightning",
         prompt: prompt,
         width: 576,
         height: 1024
@@ -396,24 +395,29 @@ async function generateMovieScene(sceneData) {
   const generateSceneContent = async (scene, index) => {
     console.log(`Processing scene ${index + 1}/${sceneData.scenes.length}...`);
 
-    // Use fal.ai fast-svd-lcm/text-to-video to generate video content
+    // Use Livepeer's text-to-image-to-video pipeline to generate video content
     console.log(`Generating video for prompt: ${scene.prompt}`);
-    const videoData = await generateVideoFromText(scene.prompt, scene.duration);
     
-    // Save the video to a local file with absolute path
-    const videoPath = path.resolve(process.cwd(), `ai_generated_video_${index}_${Date.now()}.mp4`);
-    await saveVideoToFile(videoData, videoPath);
-    
-    // Verify the file was created
-    if (!fs.existsSync(videoPath)) {
-      console.error(`Video file was not created at ${videoPath}`);
-      throw new Error(`Failed to save video file at ${videoPath}`);
+    try {
+      // This function now returns a local file path rather than a URL
+      const videoPath = await generateVideoFromText(scene.prompt, scene.duration);
+      
+      // Verify the file was created
+      if (!fs.existsSync(videoPath)) {
+        console.error(`Video file was not created at ${videoPath}`);
+        throw new Error(`Failed to generate video file at ${videoPath}`);
+      }
+      
+      console.log(`Video for scene ${index + 1} generated successfully at ${videoPath}`);
+      
+      return {
+        videoPath: videoPath,
+        duration: scene.duration
+      };
+    } catch (error) {
+      console.error(`Error generating video for scene ${index + 1}:`, error.message);
+      throw error;
     }
-    
-    return {
-      videoPath: videoPath,
-      duration: scene.duration
-    };
   };
 
   // Start both video and audio generation in parallel
@@ -696,6 +700,18 @@ async function generateSoundEffect(soundEffectDescription, outputPath, retryCoun
   try {
     console.log(`Generating sound effect: ${soundEffectDescription}`);
     
+    // Check if ElevenLabs client is available
+    if (!client) {
+      console.log('ElevenLabs client not available, using Livepeer API for sound effect generation');
+      // Use Livepeer API as fallback
+      return generateDialogue({
+        text: soundEffectDescription,
+        description: 'Sound effect',
+        outputPath: outputPath || `sound_effect_${Date.now()}.mp3`
+      });
+    }
+    
+    // Use ElevenLabs for sound effects if available
     const audioBuffer = await client.textToSoundEffects.convert({
       text: soundEffectDescription,
       duration_seconds: 5, // Adjust as needed
@@ -715,7 +731,18 @@ async function generateSoundEffect(soundEffectDescription, outputPath, retryCoun
       return generateSoundEffect(soundEffectDescription, outputPath, retryCount + 1);
     }
     
-    throw error;
+    // If all retries fail, try using the Livepeer API as a fallback
+    console.log('All retries failed, using Livepeer API as fallback for sound effect generation');
+    try {
+      return generateDialogue({
+        text: soundEffectDescription,
+        description: 'Sound effect',
+        outputPath: outputPath || `sound_effect_${Date.now()}.mp3`
+      });
+    } catch (fallbackError) {
+      console.error('Fallback sound effect generation failed:', fallbackError);
+      throw error; // Throw the original error
+    }
   }
 }
 async function createVideoWithAudio(videoPaths, audioPaths, outputPath) {
@@ -1237,25 +1264,43 @@ async function handleCreateMovie(prompt) {
     const playbackUrl = await generateMovieScene(sceneData);
 
     console.log('Playback URL:', playbackUrl);
+    return playbackUrl;
 
   } catch (error) {
     console.error(`Error processing movie`, error);
+    throw error;
   }
 }
 
 async function main() {
   try {
     console.log('Starting the movie generation service...');
-    handleCreateMovie("entertain");
-    // Keep the script running
-    process.stdin.resume();
+    // Check if a prompt was provided as a command line argument
+    const prompt = process.argv[2] || "entertain";
+    console.log(`Using prompt: ${prompt}`);
+    
+    const playbackUrl = await handleCreateMovie(prompt);
+    console.log('Movie generation complete!');
+    console.log('Watch your movie at:', playbackUrl);
+    
+    // Exit process with success code
+    process.exit(0);
   } catch (error) {
     console.error('Error in main function:', error);
+    // Exit process with error code
+    process.exit(1);
   }
 }
 
-// Comment out or remove the runDemo() call
-// runDemo();
+// Export functions for use as a module
+module.exports = {
+  generateVideoFromText,
+  generateMovieScene,
+  generateSceneAudio,
+  handleCreateMovie
+};
 
-// Run the main function
-main();
+// Run the main function if this file is executed directly
+if (require.main === module) {
+  main();
+}
