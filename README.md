@@ -11,6 +11,20 @@ An AI-powered movie generation tool that creates short-form vertical videos with
 - **Parallel Processing**: Generates video and audio concurrently for faster creation
 - **Modular Architecture**: Well-organized codebase with separate modules for different services
 
+## Technology Decisions
+
+### Video Generation Approach
+
+We evaluated several approaches for AI video generation:
+
+1. **Livepeer Text-to-Image-to-Video**: While more cost-effective, this approach (converting text to images and then to video using ffmpeg) produces blurrier outputs with less coherent motion. We've included this implementation in the `textToimgTovideo` directory for reference.
+
+2. **fal.ai Fast-SVD Model** (Current Implementation): Offers a good balance between quality and cost. This model produces decent quality videos with reasonable generation times and costs.
+
+3. **High-End Models** (e.g., Klingon 2.0 Master): These models produce significantly higher quality videos but at a much higher cost (several dollars per video generated). This option would be suitable for production-quality content but is expensive for experimentation.
+
+Our current implementation uses the fal.ai Fast-SVD model as it provides the best balance of quality and cost for our needs. The code is structured to make it relatively easy to switch to other models if needed.
+
 ## Project Structure
 
 ```
@@ -19,7 +33,7 @@ An AI-powered movie generation tool that creates short-form vertical videos with
   /services     - API service modules (Grok, fal.ai, Livepeer)
   /utils        - Utility functions for media processing
   index.js      - Main application logic
-/backup         - Backup of original monolithic code
+/textToimgTovideo - Alternative implementation using text-to-image-to-video approach
 index.js        - Entry point wrapper script
 ```
 
