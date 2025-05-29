@@ -17,7 +17,7 @@ An AI-powered movie generation tool that creates short-form vertical videos with
 
 We evaluated several approaches for AI video generation:
 
-1. **Livepeer Text-to-Image-to-Video**: While more cost-effective, this approach (converting text to images and then to video using ffmpeg) produces blurrier outputs with less coherent motion. We've included this implementation in the `textToimgTovideo` directory for reference.
+1. **Livepeer Text-to-Image-to-Video**: While more cost-effective, this approach (converting text to images and then to video and adjusting length using ffmpeg) produces blurrier outputs with less coherent motion. We've included this implementation in the `textToimgTovideo` directory for reference.
 
 2. **fal.ai Fast-SVD Model** (Current Implementation): Offers a good balance between quality and cost. This model produces decent quality videos with reasonable generation times and costs.
 
