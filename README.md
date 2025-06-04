@@ -69,15 +69,15 @@ Honor Roll is a platform that combines AI video generation with a decentralized 
 ### Prerequisites
 - Node.js (v16+)
 - npm or yarn
-- Web3 wallet (MetaMask recommended)
+- Tomo wallet (https://tomo.inc)
 
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/honor-roll.git
+git clone https://github.com/madschristensen99/honorRoll.git
 
 # Install dependencies
-cd honor-roll
+cd honorRoll
 npm install
 
 # Start development server
