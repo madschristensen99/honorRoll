@@ -55,7 +55,9 @@ async function generateVideoFromText(prompt, duration, retryCount = 0) {
     
     // Use the subscribe method with video_size parameter for portrait mode
     // Generate frames based on target duration for more accurate timing
-    const result = await fal.subscribe("fal-ai/fast-svd/text-to-video", {
+    // cheap:fal-ai/fast-svd/text-to-video
+    // expensive: fal-ai/kling-video/v2.1/master/text-to-video
+    const result = await fal.subscribe("fal-ai/kling-video/v2.1/master/text-to-video", {
       input: {
         prompt: enhancedPrompt,
         negative_prompt: "unrealistic, saturated, high contrast, big nose, painting, drawing, sketch, cartoon, anime, manga, render, CG, 3d, watermark, signature, label",
@@ -65,7 +67,9 @@ async function generateVideoFromText(prompt, duration, retryCount = 0) {
         deep_cache: "none",
         fps: STANDARD_FPS,
         num_frames: targetFrames, // Generate frames based on target duration
-        video_size: "portrait_16_9" // Use portrait mode
+        video_size: "portrait_16_9", // Use portrait mode
+        aspect_ratio: "16:9",
+        duration: "5"
       },
       logs: false, // Disable detailed logs
       // Remove onQueueUpdate to prevent progress logging

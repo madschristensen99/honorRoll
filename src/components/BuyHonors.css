@@ -1,0 +1,164 @@
+.buy-honors-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.buy-honors-container h2 {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  color: var(--text-color);
+  text-align: center;
+  position: relative;
+  display: inline-block;
+}
+
+.buy-honors-container h2::after {
+  content: '🎖️';
+  font-size: 1.5rem;
+  margin-left: 10px;
+}
+
+.honors-info {
+  background-color: var(--secondary-color);
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.1);
+  border: 3px solid var(--accent-color);
+}
+
+.honors-info p {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.honors-info ul {
+  list-style-type: none;
+  padding-left: 1rem;
+}
+
+.honors-info li {
+  margin-bottom: 0.5rem;
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.honors-info li::before {
+  content: '✨';
+  position: absolute;
+  left: 0;
+}
+
+.buy-form {
+  background-color: var(--bg-color);
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.1);
+  border: 3px solid var(--accent-color);
+}
+
+.amount-input-container {
+  margin-bottom: 1.5rem;
+}
+
+.amount-input-container label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.amount-input-container input {
+  width: 100%;
+  padding: 0.8rem;
+  font-size: 1.2rem;
+  border: 2px solid var(--accent-color);
+  border-radius: 8px;
+  background-color: white;
+}
+
+.price-display {
+  background-color: #FFD700;
+  color: #333;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  border: 2px dashed #333;
+}
+
+.price-display p {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 0.5rem 0;
+}
+
+.price-note {
+  font-size: 0.9rem !important;
+  opacity: 0.8;
+}
+
+.buy-btn {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: block;
+  width: 100%;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.buy-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
+}
+
+.buy-btn:active {
+  transform: translateY(1px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.buy-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.error-message {
+  color: var(--error-color);
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: rgba(255, 0, 0, 0.1);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.success-message {
+  color: green;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: rgba(0, 255, 0, 0.1);
+  border-radius: 4px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.auth-message {
+  text-align: center;
+  padding: 3rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  border: 2px dashed var(--accent-color);
+}
+
+.auth-message p {
+  font-size: 1.5rem;
+  color: var(--text-color);
+}

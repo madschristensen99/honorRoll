@@ -1,0 +1,115 @@
+.auth-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-button {
+  display: flex;
+  align-items: center;
+}
+
+.auth-button .connect-btn {
+  background-color: var(--accent-color);
+  color: var(--text-color);
+  border: 3px solid var(--text-color);
+  border-radius: 12px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  display: inline-block;
+}
+
+.connect-btn::before {
+  content: '🔑';
+  margin-right: 8px;
+}
+
+.connect-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
+}
+
+.connect-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.auth-button.logout {
+  background-color: transparent;
+  border: 1px solid white;
+  color: white;
+}
+
+.auth-button.logout:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-address {
+  display: flex;
+  align-items: center;
+  background-color: var(--secondary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  margin-right: 1rem;
+  font-family: monospace;
+  font-weight: bold;
+  border: 2px dashed var(--accent-color);
+  display: inline-block;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.user-address::before {
+  content: '👤';
+  margin-right: 8px;
+  font-size: 1.2rem;
+}
+
+.user-balance {
+  display: flex;
+  align-items: center;
+  background-color: #FFD700; /* Gold color for Honors */
+  color: #333;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  margin-right: 1rem;
+  font-weight: bold;
+  border: 2px dashed #333;
+  text-shadow: 0px 0px 2px rgba(255, 255, 255, 0.8);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.user-balance::before {
+  content: '🎖'; /* Trophy emoji for Honors */
+  margin-right: 8px;
+  font-size: 1.2rem;
+}
+
+.balance-label {
+  margin-left: 5px;
+  font-size: 0.9rem;
+}
+
+.balance-amount {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.auth-error {
+  color: var(--error-color);
+  font-size: 0.8rem;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-top: 5px;
+}
