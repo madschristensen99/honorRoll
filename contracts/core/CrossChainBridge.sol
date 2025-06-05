@@ -191,8 +191,11 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
             "Invalid source address"
         );
         
-        // Decode message type
-        (bytes32 messageType) = abi.decode(data[:32], (bytes32));
+        // Decode message type - extract first 32 bytes for the message type
+        bytes32 messageType;
+        assembly {
+            messageType := mload(add(data, 32))
+        }
         
         // Process message based on type
         if (messageType == REGISTER_IP_ASSET) {
