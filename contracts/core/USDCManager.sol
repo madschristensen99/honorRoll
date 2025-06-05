@@ -22,6 +22,7 @@ contract USDCManager is AccessControl, ReentrancyGuard {
     IHonorToken public honorToken;
     IAavePool public aavePool;
     address public operatorWallet;
+    address public yieldManager;
     
     // Total USDC deposited in Aave
     uint256 public totalValueLocked;
@@ -30,6 +31,7 @@ contract USDCManager is AccessControl, ReentrancyGuard {
     event USDCDeposited(address indexed user, uint256 amount);
     event USDCWithdrawn(address indexed to, uint256 amount, string reason);
     event OperatorWalletUpdated(address indexed oldWallet, address indexed newWallet);
+    event YieldManagerUpdateFailed(string operation, uint256 amount);
     
     // Roles
     bytes32 public constant VIDEO_CREATOR_ROLE = keccak256("VIDEO_CREATOR_ROLE");
@@ -59,6 +61,17 @@ contract USDCManager is AccessControl, ReentrancyGuard {
     }
     
     /**
+     * @dev Set the YieldManager contract address
+     * @param _yieldManager Address of the YieldManager contract
+     * Requirements:
+     * - Caller must be admin
+     */
+    function setYieldManager(address _yieldManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_yieldManager != address(0), "Invalid address");
+        yieldManager = _yieldManager;
+    }
+    
+    /**
      * @dev Deposit USDC and receive HONOR tokens
      * @param amount Amount of USDC to deposit
      */
@@ -79,6 +92,17 @@ contract USDCManager is AccessControl, ReentrancyGuard {
         
         // Update total value locked
         totalValueLocked += amount;
+        
+        // Notify YieldManager of the deposit if set
+        if (yieldManager != address(0)) {
+            (bool success, ) = yieldManager.call(
+                abi.encodeWithSignature("recordDeposit(uint256)", amount)
+            );
+            // We don't revert if this fails, as it's not critical for the deposit flow
+            if (!success) {
+                emit YieldManagerUpdateFailed("recordDeposit", amount);
+            }
+        }
         
         emit USDCDeposited(msg.sender, amount);
     }
@@ -103,7 +127,18 @@ contract USDCManager is AccessControl, ReentrancyGuard {
         // Update total value locked
         totalValueLocked -= amount;
         
-        emit USDCWithdrawn(to, amount, "Video Creation");
+        // Notify YieldManager of the withdrawal if set
+        if (yieldManager != address(0)) {
+            (bool success, ) = yieldManager.call(
+                abi.encodeWithSignature("recordWithdrawal(uint256)", amount)
+            );
+            // We don't revert if this fails, as it's not critical for the withdrawal flow
+            if (!success) {
+                emit YieldManagerUpdateFailed("recordWithdrawal", amount);
+            }
+        }
+        
+        emit USDCWithdrawn(to, amount, "Video creation");
     }
     
     /**

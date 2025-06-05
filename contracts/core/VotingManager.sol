@@ -37,6 +37,7 @@ contract VotingManager is AccessControl, ReentrancyGuard {
     // State variables
     IHonorToken public honorToken;
     IYieldManager public yieldManager;
+    address public videoManager;
     
     // Polls storage
     mapping(uint256 => Poll) public polls; // Maps videoId to Poll
@@ -67,6 +68,17 @@ contract VotingManager is AccessControl, ReentrancyGuard {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(POLL_CREATOR_ROLE, admin);
         _grantRole(POLL_FINALIZER_ROLE, admin);
+    }
+    
+    /**
+     * @dev Set the VideoManager contract address
+     * @param _videoManager Address of the VideoManager contract
+     * Requirements:
+     * - Caller must be admin
+     */
+    function setVideoManager(address _videoManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_videoManager != address(0), "Invalid address");
+        videoManager = _videoManager;
     }
     
     /**
@@ -177,6 +189,15 @@ contract VotingManager is AccessControl, ReentrancyGuard {
      * - Caller must have POLL_FINALIZER_ROLE
      * - Poll must exist and be finalized
      */
+    /**
+     * @dev Distribute yield to winning voters and previous creators
+     * @param videoId ID of the video with the poll
+     * @param sequelVideoId ID of the sequel video triggering distribution
+     * Requirements:
+     * - Caller must have POLL_FINALIZER_ROLE
+     * - Poll must exist and be finalized
+     * - Poll must have a winning choice
+     */
     function distributeYield(uint256 videoId, uint256 sequelVideoId) external onlyRole(POLL_FINALIZER_ROLE) nonReentrant {
         Poll storage poll = polls[videoId];
         
@@ -204,8 +225,31 @@ contract VotingManager is AccessControl, ReentrancyGuard {
             mstore(voterWeights, winnerCount)
         }
         
-        // Get previous creators (this would come from VideoManager in a real implementation)
-        address[] memory previousCreators = new address[](0); // Placeholder
+        // Get previous creators from VideoManager
+        require(videoManager != address(0), "VideoManager not set");
+        
+        // Call VideoManager to get previous creators
+        (bool success, bytes memory data) = videoManager.call(
+            abi.encodeWithSignature("getSequenceVideos(uint256)", videoId)
+        );
+        require(success, "Failed to get sequence videos");
+        
+        // Decode the returned video IDs
+        uint256[] memory sequenceVideos = abi.decode(data, (uint256[]));
+        
+        // Get creators for each video
+        address[] memory previousCreators = new address[](sequenceVideos.length);
+        
+        for (uint256 i = 0; i < sequenceVideos.length; i++) {
+            (success, data) = videoManager.call(
+                abi.encodeWithSignature("getVideo(uint256)", sequenceVideos[i])
+            );
+            require(success, "Failed to get video");
+            
+            // The first field in the Video struct is the ID, the second is the creator
+            (,address creator,,,,,,,,,) = abi.decode(data, (uint256,address,uint256,bool,uint256,uint256,string,string,uint256,bool,string));
+            previousCreators[i] = creator;
+        }
         
         // Distribute yield through YieldManager
         yieldManager.distributeYield(

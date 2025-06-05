@@ -19,6 +19,7 @@ contract YieldManager is AccessControl, ReentrancyGuard {
     // State variables
     IAavePool public aavePool;
     IERC20 public usdcToken;
+    IERC20 public aaveToken;  // aToken for USDC in Aave
     address public operatorWallet;
     
     // Total USDC deposited in Aave
@@ -29,6 +30,9 @@ contract YieldManager is AccessControl, ReentrancyGuard {
     
     // Last yield collection timestamp
     uint256 public lastYieldCollectionTime;
+    
+    // Last recorded aToken balance
+    uint256 public lastATokenBalance;
     
     // Roles
     bytes32 public constant YIELD_DISTRIBUTOR_ROLE = keccak256("YIELD_DISTRIBUTOR_ROLE");
@@ -48,13 +52,18 @@ contract YieldManager is AccessControl, ReentrancyGuard {
     constructor(
         address _aavePool,
         address _usdcToken,
+        address _aaveToken,
         address _operatorWallet,
         address admin
     ) {
         aavePool = IAavePool(_aavePool);
         usdcToken = IERC20(_usdcToken);
+        aaveToken = IERC20(_aaveToken);
         operatorWallet = _operatorWallet;
         lastYieldCollectionTime = block.timestamp;
+        
+        // Initialize last aToken balance
+        lastATokenBalance = aaveToken.balanceOf(address(this));
         
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(YIELD_DISTRIBUTOR_ROLE, admin);
@@ -66,10 +75,16 @@ contract YieldManager is AccessControl, ReentrancyGuard {
      */
     function collectYield() public nonReentrant {
         uint256 currentYield = calculateCurrentYield();
-        undistributedYield += currentYield;
-        lastYieldCollectionTime = block.timestamp;
-        
-        emit YieldCollected(currentYield, block.timestamp);
+        if (currentYield > 0) {
+            undistributedYield += currentYield;
+            
+            // Update the last aToken balance
+            lastATokenBalance = aaveToken.balanceOf(address(this));
+            
+            lastYieldCollectionTime = block.timestamp;
+            
+            emit YieldCollected(currentYield, block.timestamp);
+        }
     }
     
     /**
@@ -176,9 +191,18 @@ contract YieldManager is AccessControl, ReentrancyGuard {
      * Note: In a real implementation, this would query Aave for the actual yield
      */
     function calculateCurrentYield() internal view returns (uint256) {
-        // This is a simplified placeholder - in production, this would query Aave
-        // For example, compare current aToken balance with expected principal
-        return 0; // Placeholder - replace with actual calculation
+        // Get current aToken balance
+        uint256 currentATokenBalance = aaveToken.balanceOf(address(this));
+        
+        // If current balance is less than or equal to last recorded balance, no yield
+        if (currentATokenBalance <= lastATokenBalance) {
+            return 0;
+        }
+        
+        // Calculate yield as the difference between current and last balance
+        uint256 yieldAmount = currentATokenBalance - lastATokenBalance;
+        
+        return yieldAmount;
     }
     
     /**
@@ -189,6 +213,10 @@ contract YieldManager is AccessControl, ReentrancyGuard {
      */
     function recordDeposit(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         totalValueLocked += amount;
+        
+        // Update the last aToken balance after deposit
+        lastATokenBalance = aaveToken.balanceOf(address(this));
+        
         emit TotalValueLockedUpdated(totalValueLocked);
     }
     
@@ -204,6 +232,10 @@ contract YieldManager is AccessControl, ReentrancyGuard {
         } else {
             totalValueLocked -= amount;
         }
+        
+        // Update the last aToken balance after withdrawal
+        lastATokenBalance = aaveToken.balanceOf(address(this));
+        
         emit TotalValueLockedUpdated(totalValueLocked);
     }
 }

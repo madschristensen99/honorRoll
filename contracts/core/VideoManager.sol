@@ -28,7 +28,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         string prompt;        // Video prompt/description
         string ipfsHash;      // IPFS hash of the video
         uint256 creationTime; // When the video was created
-        bool registered;      // Whether the video is registered with Story Protocol
+        bool registered;     // Whether registered with Story Protocol
+        string ipId;         // Story Protocol IP ID when registered
     }
     
     // State variables
@@ -37,6 +38,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
     IYieldManager public yieldManager;
     IStoryProtocol public storyProtocol;
     address public operatorWallet;
+    address public crossChainBridge; // Address of CrossChainBridge contract
     
     // Video storage
     mapping(uint256 => Video) public videos;
@@ -51,9 +53,11 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         string prompt
     );
     event IPRegistered(uint256 indexed videoId, string ipfsHash);
+    event IPIdReceived(uint256 indexed videoId, string ipId);
     
     // Roles
     bytes32 public constant VIDEO_CREATOR_ROLE = keccak256("VIDEO_CREATOR_ROLE");
+    bytes32 public constant BRIDGE_CALLBACK_ROLE = keccak256("BRIDGE_CALLBACK_ROLE");
     
     /**
      * @dev Constructor
@@ -80,6 +84,17 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(VIDEO_CREATOR_ROLE, admin);
+    }
+    
+    /**
+     * @dev Set the CrossChainBridge contract address
+     * @param _crossChainBridge Address of the CrossChainBridge contract
+     * Requirements:
+     * - Caller must be admin
+     */
+    function setCrossBridgeAddress(address _crossChainBridge) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_crossChainBridge != address(0), "Invalid address");
+        crossChainBridge = _crossChainBridge;
     }
     
     /**
@@ -114,7 +129,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             prompt: prompt,
             ipfsHash: ipfsHash,
             creationTime: block.timestamp,
-            registered: false
+            registered: false,
+            ipId: ""
         });
         
         // Register with Story Protocol (async, will be marked as registered later)
@@ -183,7 +199,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             prompt: prompt,
             ipfsHash: ipfsHash,
             creationTime: block.timestamp,
-            registered: false
+            registered: false,
+            ipId: ""
         });
         
         // Add to sequence
@@ -267,11 +284,37 @@ contract VideoManager is AccessControl, ReentrancyGuard {
      * Note: This is a placeholder for the actual Story Protocol integration
      */
     function registerWithStoryProtocol(uint256 videoId) internal {
-        // In a real implementation, this would interact with Story Protocol
-        // For now, just mark as registered
-        videos[videoId].registered = true;
+        require(crossChainBridge != address(0), "CrossChainBridge not set");
         
-        emit IPRegistered(videoId, videos[videoId].ipfsHash);
+        Video storage video = videos[videoId];
+        
+        // Get parent IP ID if this is a sequel
+        string memory parentIpId = "";
+        if (!video.isOriginal) {
+            Video storage parentVideo = videos[video.sequenceHead];
+            require(parentVideo.registered, "Parent video not registered with Story Protocol");
+            parentIpId = parentVideo.ipId;
+        }
+        
+        // Call CrossChainBridge to register with Story Protocol
+        bytes memory callData = abi.encodeWithSignature(
+            "registerIPAsset(uint256,address,string,bool,uint256)",
+            videoId,
+            video.creator,
+            video.ipfsHash,
+            video.isOriginal,
+            video.isOriginal ? 0 : video.sequenceHead
+        );
+        
+        // Forward call to CrossChainBridge with submission fee
+        (bool success, ) = crossChainBridge.call{value: 0.001 ether}(callData);
+        require(success, "Failed to call CrossChainBridge");
+        
+        // Mark as registration in progress
+        // The actual IP ID will be set when we receive confirmation from Story Protocol
+        video.registered = true;
+        
+        emit IPRegistered(videoId, video.ipfsHash);
     }
     
     /**
