@@ -1,0 +1,308 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "../interfaces/IHonorToken.sol";
+import "../interfaces/IUSDCManager.sol";
+import "../interfaces/IYieldManager.sol";
+import "../interfaces/IStoryProtocol.sol";
+
+/**
+ * @title VideoManager
+ * @dev Manages video creation, sequences, and IP registration with Story Protocol
+ */
+contract VideoManager is AccessControl, ReentrancyGuard {
+    // Constants
+    uint256 public constant VIDEO_CREATION_COST = 20 * 10**6; // 20 HONOR (6 decimals)
+    uint256 public constant ROYALTY_AMOUNT = 1 * 10**6; // 1 USDC for royalties
+    
+    // Video data structure
+    struct Video {
+        uint256 id;
+        address creator;
+        uint256 nextVideoId;  // Next video in sequence (0 if none)
+        bool isOriginal;      // True if this is the first video in a sequence
+        uint256 sequenceHead; // ID of the original video in the sequence
+        uint256 sequenceLength; // Number of videos in the sequence
+        string prompt;        // Video prompt/description
+        string ipfsHash;      // IPFS hash of the video
+        uint256 creationTime; // When the video was created
+        bool registered;      // Whether the video is registered with Story Protocol
+    }
+    
+    // State variables
+    IHonorToken public honorToken;
+    IUSDCManager public usdcManager;
+    IYieldManager public yieldManager;
+    IStoryProtocol public storyProtocol;
+    address public operatorWallet;
+    
+    // Video storage
+    mapping(uint256 => Video) public videos;
+    uint256 public nextVideoId = 1;
+    
+    // Events
+    event VideoCreated(
+        uint256 indexed videoId, 
+        address indexed creator, 
+        bool isOriginal, 
+        uint256 sequenceHead,
+        string prompt
+    );
+    event IPRegistered(uint256 indexed videoId, string ipfsHash);
+    
+    // Roles
+    bytes32 public constant VIDEO_CREATOR_ROLE = keccak256("VIDEO_CREATOR_ROLE");
+    
+    /**
+     * @dev Constructor
+     * @param _honorToken Address of the HONOR token contract
+     * @param _usdcManager Address of the USDC manager contract
+     * @param _yieldManager Address of the yield manager contract
+     * @param _storyProtocol Address of the Story Protocol interface
+     * @param _operatorWallet Address of the operator wallet
+     * @param admin Address that will have admin rights
+     */
+    constructor(
+        address _honorToken,
+        address _usdcManager,
+        address _yieldManager,
+        address _storyProtocol,
+        address _operatorWallet,
+        address admin
+    ) {
+        honorToken = IHonorToken(_honorToken);
+        usdcManager = IUSDCManager(_usdcManager);
+        yieldManager = IYieldManager(_yieldManager);
+        storyProtocol = IStoryProtocol(_storyProtocol);
+        operatorWallet = _operatorWallet;
+        
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(VIDEO_CREATOR_ROLE, admin);
+    }
+    
+    /**
+     * @dev Create a new original video (not a sequel)
+     * @param creator Address of the video creator
+     * @param prompt Description/prompt of the video
+     * @param ipfsHash IPFS hash of the video
+     * Requirements:
+     * - Caller must have VIDEO_CREATOR_ROLE
+     * - Creator must have approved this contract to spend their HONOR
+     */
+    function createOriginalVideo(
+        address creator,
+        string memory prompt,
+        string memory ipfsHash
+    ) external onlyRole(VIDEO_CREATOR_ROLE) nonReentrant returns (uint256) {
+        // Burn HONOR tokens from creator
+        honorToken.burnFrom(creator, VIDEO_CREATION_COST);
+        
+        // Withdraw USDC from Aave and send to operator
+        usdcManager.withdrawForVideo(VIDEO_CREATION_COST, operatorWallet);
+        
+        // Create video record
+        uint256 videoId = nextVideoId++;
+        videos[videoId] = Video({
+            id: videoId,
+            creator: creator,
+            nextVideoId: 0,
+            isOriginal: true,
+            sequenceHead: videoId, // Self-reference for original videos
+            sequenceLength: 1,
+            prompt: prompt,
+            ipfsHash: ipfsHash,
+            creationTime: block.timestamp,
+            registered: false
+        });
+        
+        // Register with Story Protocol (async, will be marked as registered later)
+        registerWithStoryProtocol(videoId);
+        
+        emit VideoCreated(videoId, creator, true, videoId, prompt);
+        
+        return videoId;
+    }
+    
+    /**
+     * @dev Create a sequel video
+     * @param creator Address of the video creator
+     * @param originalVideoId ID of the original video this is a sequel to
+     * @param prompt Description/prompt of the video
+     * @param ipfsHash IPFS hash of the video
+     * Requirements:
+     * - Caller must have VIDEO_CREATOR_ROLE
+     * - Creator must have approved this contract to spend their HONOR
+     * - Original video must exist
+     */
+    function createSequelVideo(
+        address creator,
+        uint256 originalVideoId,
+        string memory prompt,
+        string memory ipfsHash
+    ) external onlyRole(VIDEO_CREATOR_ROLE) nonReentrant returns (uint256) {
+        // Verify original video exists
+        Video storage originalVideo = videos[originalVideoId];
+        require(originalVideo.id != 0, "Original video does not exist");
+        
+        // Find the sequence head (in case originalVideoId is not the head)
+        uint256 sequenceHead = originalVideo.isOriginal ? originalVideoId : originalVideo.sequenceHead;
+        require(sequenceHead != 0, "Invalid sequence head");
+        
+        // Burn HONOR tokens from creator
+        honorToken.burnFrom(creator, VIDEO_CREATION_COST);
+        
+        // Calculate royalty distribution
+        Video storage headVideo = videos[sequenceHead];
+        uint256 sequenceLength = headVideo.sequenceLength;
+        
+        // Withdraw USDC from Aave
+        usdcManager.withdrawForVideo(VIDEO_CREATION_COST, address(this));
+        
+        // Distribute royalties to previous creators
+        address[] memory previousCreators = getPreviousCreators(sequenceHead);
+        distributeRoyalties(previousCreators);
+        
+        // Send remaining USDC to operator
+        uint256 operatorAmount = VIDEO_CREATION_COST - ROYALTY_AMOUNT;
+        require(
+            IERC20(address(usdcManager.usdcToken())).transfer(operatorWallet, operatorAmount),
+            "Operator payment failed"
+        );
+        
+        // Create video record
+        uint256 videoId = nextVideoId++;
+        videos[videoId] = Video({
+            id: videoId,
+            creator: creator,
+            nextVideoId: 0,
+            isOriginal: false,
+            sequenceHead: sequenceHead,
+            sequenceLength: 1, // Will be updated by addToSequence
+            prompt: prompt,
+            ipfsHash: ipfsHash,
+            creationTime: block.timestamp,
+            registered: false
+        });
+        
+        // Add to sequence
+        addToSequence(sequenceHead, videoId);
+        
+        // Register with Story Protocol (async, will be marked as registered later)
+        registerWithStoryProtocol(videoId);
+        
+        // Distribute yield to winning voters of the previous video
+        // This would be implemented by the VotingManager, which would call YieldManager
+        
+        emit VideoCreated(videoId, creator, false, sequenceHead, prompt);
+        
+        return videoId;
+    }
+    
+    /**
+     * @dev Add a video to a sequence
+     * @param sequenceHead ID of the sequence head
+     * @param videoId ID of the video to add
+     */
+    function addToSequence(uint256 sequenceHead, uint256 videoId) internal {
+        Video storage headVideo = videos[sequenceHead];
+        Video storage newVideo = videos[videoId];
+        
+        // Find the last video in the sequence
+        uint256 currentId = sequenceHead;
+        while (videos[currentId].nextVideoId != 0) {
+            currentId = videos[currentId].nextVideoId;
+        }
+        
+        // Add new video to the end of the sequence
+        videos[currentId].nextVideoId = videoId;
+        
+        // Update sequence length
+        headVideo.sequenceLength += 1;
+        newVideo.sequenceLength = headVideo.sequenceLength;
+    }
+    
+    /**
+     * @dev Get all previous creators in a sequence
+     * @param sequenceHead ID of the sequence head
+     * @return Array of creator addresses
+     */
+    function getPreviousCreators(uint256 sequenceHead) internal view returns (address[] memory) {
+        Video storage headVideo = videos[sequenceHead];
+        uint256 count = headVideo.sequenceLength;
+        
+        address[] memory creators = new address[](count);
+        
+        uint256 currentId = sequenceHead;
+        uint256 index = 0;
+        
+        while (currentId != 0 && index < count) {
+            creators[index] = videos[currentId].creator;
+            currentId = videos[currentId].nextVideoId;
+            index++;
+        }
+        
+        return creators;
+    }
+    
+    /**
+     * @dev Distribute royalties to previous creators
+     * @param creators Array of creator addresses
+     */
+    function distributeRoyalties(address[] memory creators) internal {
+        if (creators.length == 0) return;
+        
+        uint256 sharePerCreator = ROYALTY_AMOUNT / creators.length;
+        IERC20 usdcToken = IERC20(address(usdcManager.usdcToken()));
+        
+        for (uint256 i = 0; i < creators.length; i++) {
+            require(usdcToken.transfer(creators[i], sharePerCreator), "Royalty payment failed");
+        }
+    }
+    
+    /**
+     * @dev Register a video with Story Protocol
+     * @param videoId ID of the video to register
+     * Note: This is a placeholder for the actual Story Protocol integration
+     */
+    function registerWithStoryProtocol(uint256 videoId) internal {
+        // In a real implementation, this would interact with Story Protocol
+        // For now, just mark as registered
+        videos[videoId].registered = true;
+        
+        emit IPRegistered(videoId, videos[videoId].ipfsHash);
+    }
+    
+    /**
+     * @dev Get video details
+     * @param videoId ID of the video
+     * @return Video details
+     */
+    function getVideo(uint256 videoId) external view returns (Video memory) {
+        return videos[videoId];
+    }
+    
+    /**
+     * @dev Get all videos in a sequence
+     * @param sequenceHead ID of the sequence head
+     * @return Array of video IDs
+     */
+    function getSequenceVideos(uint256 sequenceHead) external view returns (uint256[] memory) {
+        Video storage headVideo = videos[sequenceHead];
+        uint256 count = headVideo.sequenceLength;
+        
+        uint256[] memory videoIds = new uint256[](count);
+        
+        uint256 currentId = sequenceHead;
+        uint256 index = 0;
+        
+        while (currentId != 0 && index < count) {
+            videoIds[index] = currentId;
+            currentId = videos[currentId].nextVideoId;
+            index++;
+        }
+        
+        return videoIds;
+    }
+}
