@@ -400,6 +400,17 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
         (bool success, ) = to.call{value: amount}("");
         require(success, "ETH transfer failed");
     }
+
+    /**
+     * @dev Update the Story Protocol bridge address
+     * @param _storyBridgeAddress Address of the bridge contract on Story Protocol chain
+     * Requirements:
+     * - Caller must be admin
+     */
+    function updateStoryBridge(address _storyBridgeAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_storyBridgeAddress != address(0), "Invalid address");
+        storyBridgeAddress = _storyBridgeAddress;
+    }
     
     /**
      * @dev Receive function to accept ETH
