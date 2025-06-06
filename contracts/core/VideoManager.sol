@@ -26,7 +26,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         uint256 sequenceHead; // ID of the original video in the sequence
         uint256 sequenceLength; // Number of videos in the sequence
         string prompt;        // Video prompt/description
-        string ipfsHash;      // IPFS hash of the video
+        string livepeerLink;  // Livepeer link to the video
         uint256 creationTime; // When the video was created
         bool registered;     // Whether registered with Story Protocol
         string ipId;         // Story Protocol IP ID when registered
@@ -52,11 +52,11 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         uint256 sequenceHead,
         string prompt
     );
-    event IPRegistered(uint256 indexed videoId, string ipfsHash);
+    event IPRegistered(uint256 indexed videoId, string livepeerLink);
     event IPIdReceived(uint256 indexed videoId, string ipId);
     
     // Roles
-    bytes32 public constant VIDEO_CREATOR_ROLE = keccak256("VIDEO_CREATOR_ROLE");
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     bytes32 public constant BRIDGE_CALLBACK_ROLE = keccak256("BRIDGE_CALLBACK_ROLE");
     
     /**
@@ -83,7 +83,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         operatorWallet = _operatorWallet;
         
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(VIDEO_CREATOR_ROLE, admin);
+        _grantRole(OPERATOR_ROLE, admin);
+        _grantRole(OPERATOR_ROLE, operatorWallet);
     }
     
     /**
@@ -101,16 +102,19 @@ contract VideoManager is AccessControl, ReentrancyGuard {
      * @dev Create a new original video (not a sequel)
      * @param creator Address of the video creator
      * @param prompt Description/prompt of the video
-     * @param ipfsHash IPFS hash of the video
      * Requirements:
-     * - Caller must have VIDEO_CREATOR_ROLE
      * - Creator must have approved this contract to spend their HONOR
      */
     function createOriginalVideo(
         address creator,
-        string memory prompt,
-        string memory ipfsHash
-    ) external onlyRole(VIDEO_CREATOR_ROLE) nonReentrant returns (uint256) {
+        string memory prompt
+    ) external nonReentrant returns (uint256) {
+        // Check that creator has enough HONOR tokens
+        require(honorToken.balanceOf(creator) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
+        
+        // Check that creator has approved this contract to spend their HONOR tokens
+        require(honorToken.allowance(creator, address(this)) >= VIDEO_CREATION_COST, "Insufficient HONOR allowance");
+        
         // Burn HONOR tokens from creator
         honorToken.burnFrom(creator, VIDEO_CREATION_COST);
         
@@ -127,7 +131,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             sequenceHead: videoId, // Self-reference for original videos
             sequenceLength: 1,
             prompt: prompt,
-            ipfsHash: ipfsHash,
+            livepeerLink: "",  // Will be set by operator later
             creationTime: block.timestamp,
             registered: false,
             ipId: ""
@@ -146,18 +150,15 @@ contract VideoManager is AccessControl, ReentrancyGuard {
      * @param creator Address of the video creator
      * @param originalVideoId ID of the original video this is a sequel to
      * @param prompt Description/prompt of the video
-     * @param ipfsHash IPFS hash of the video
      * Requirements:
-     * - Caller must have VIDEO_CREATOR_ROLE
      * - Creator must have approved this contract to spend their HONOR
      * - Original video must exist
      */
     function createSequelVideo(
         address creator,
         uint256 originalVideoId,
-        string memory prompt,
-        string memory ipfsHash
-    ) external onlyRole(VIDEO_CREATOR_ROLE) nonReentrant returns (uint256) {
+        string memory prompt
+    ) external nonReentrant returns (uint256) {
         // Verify original video exists
         Video storage originalVideo = videos[originalVideoId];
         require(originalVideo.id != 0, "Original video does not exist");
@@ -165,6 +166,12 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         // Find the sequence head (in case originalVideoId is not the head)
         uint256 sequenceHead = originalVideo.isOriginal ? originalVideoId : originalVideo.sequenceHead;
         require(sequenceHead != 0, "Invalid sequence head");
+        
+        // Check that creator has enough HONOR tokens
+        require(honorToken.balanceOf(creator) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
+        
+        // Check that creator has approved this contract to spend their HONOR tokens
+        require(honorToken.allowance(creator, address(this)) >= VIDEO_CREATION_COST, "Insufficient HONOR allowance");
         
         // Burn HONOR tokens from creator
         honorToken.burnFrom(creator, VIDEO_CREATION_COST);
@@ -197,7 +204,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             sequenceHead: sequenceHead,
             sequenceLength: 1, // Will be updated by addToSequence
             prompt: prompt,
-            ipfsHash: ipfsHash,
+            livepeerLink: "", // Will be set by operator later
             creationTime: block.timestamp,
             registered: false,
             ipId: ""
@@ -287,6 +294,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         require(crossChainBridge != address(0), "CrossChainBridge not set");
         
         Video storage video = videos[videoId];
+        require(bytes(video.livepeerLink).length > 0, "Video link not set");
         
         // Get parent IP ID if this is a sequel
         string memory parentIpId = "";
@@ -301,7 +309,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             "registerIPAsset(uint256,address,string,bool,uint256)",
             videoId,
             video.creator,
-            video.ipfsHash,
+            video.livepeerLink,
             video.isOriginal,
             video.isOriginal ? 0 : video.sequenceHead
         );
@@ -314,7 +322,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         // The actual IP ID will be set when we receive confirmation from Story Protocol
         video.registered = true;
         
-        emit IPRegistered(videoId, video.ipfsHash);
+        emit IPRegistered(videoId, video.livepeerLink);
     }
     
     /**
@@ -347,5 +355,24 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         }
         
         return videoIds;
+    }
+    
+    /**
+     * @dev Set the Livepeer link for a video
+     * @param videoId ID of the video
+     * @param livepeerLink Livepeer link to the video
+     * Requirements:
+     * - Caller must have OPERATOR_ROLE
+     * - Video must exist
+     */
+    function setLivepeerLink(uint256 videoId, string memory livepeerLink) external onlyRole(OPERATOR_ROLE) {
+        Video storage video = videos[videoId];
+        require(video.id != 0, "Video does not exist");
+        require(bytes(video.livepeerLink).length == 0, "Livepeer link already set");
+        
+        video.livepeerLink = livepeerLink;
+        
+        // Now that we have the video link, register with Story Protocol
+        registerWithStoryProtocol(videoId);
     }
 }
