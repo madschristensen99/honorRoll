@@ -22,12 +22,20 @@ const EXTERNAL_CONTRACTS = {
     // Aave contracts
     AAVE_POOL: '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5',
     USDC_TOKEN: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    AAVE_USDC: '0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB',
+    
+    // Honor Roll contracts
+    YIELD_MANAGER: '0x8948c67Cd0ef9Df13024D4F0cF426C7A9035CcE5',
+    USDC_MANAGER: '0x5167E122266B8C9842b6F4794E48a2f2C10ab89f',
   },
   
   // Story Protocol Chain
   [NETWORK_IDS.STORY_PROTOCOL]: {
     // deBridge contracts for cross-chain messaging
     DEBRIDGE_GATE: '0x43dE2d77BF8027e25dBD179B491e8d64f38398aA',
+    
+    // Honor Roll contracts
+    STORY_BRIDGE: '0x8ed734A9ab0074C20093ECC42E2610ED6139275C',
     
     // Story Protocol contracts
     STORY_PROTOCOL: {

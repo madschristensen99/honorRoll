@@ -108,7 +108,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
     function createOriginalVideo(
         address creator,
         string memory prompt
-    ) external nonReentrant returns (uint256) {
+    ) external payable nonReentrant returns (uint256) {
+        require(msg.value >= 0.001 ether, "Must include 0.001 ETH for deBridge fee");
         // Check that creator has enough HONOR tokens
         require(honorToken.balanceOf(creator) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
         
@@ -314,8 +315,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             video.isOriginal ? 0 : video.sequenceHead
         );
         
-        // Forward call to CrossChainBridge with submission fee
-        (bool success, ) = crossChainBridge.call{value: 0.001 ether}(callData);
+        // Forward call to CrossChainBridge with the deBridge fee
+        (bool success, ) = crossChainBridge.call{value: msg.value}(callData);
         require(success, "Failed to call CrossChainBridge");
         
         // Mark as registration in progress
