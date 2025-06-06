@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 /**
  * @title IYieldManager
  * @dev Interface for the YieldManager contract
  */
 interface IYieldManager {
+    /**
+     * @dev Returns the aToken used for yield generation
+     */
+    function aaveToken() external view returns (IERC20);
     /**
      * @dev Distribute yield to creators and voters
      * @param videoId ID of the video triggering distribution

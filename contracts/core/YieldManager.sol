@@ -21,6 +21,7 @@ contract YieldManager is AccessControl, ReentrancyGuard {
     IERC20 public usdcToken;
     IERC20 public aaveToken;  // aToken for USDC in Aave
     address public operatorWallet;
+    address public usdcManager; // USDCManager contract address
     
     // Total USDC deposited in Aave
     uint256 public totalValueLocked;
@@ -209,9 +210,15 @@ contract YieldManager is AccessControl, ReentrancyGuard {
      * @dev Updates total value locked when USDC is deposited to Aave
      * @param amount Amount deposited
      * Requirements:
-     * - Caller must be admin
+     * - Caller must have permission
      */
-    function recordDeposit(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recordDeposit(uint256 amount) external {
+        // Allow calls from USDCManager or admin
+        require(
+            msg.sender == address(usdcManager) || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            "Caller is not authorized"
+        );
+        
         totalValueLocked += amount;
         
         // Update the last aToken balance after deposit
@@ -224,9 +231,15 @@ contract YieldManager is AccessControl, ReentrancyGuard {
      * @dev Updates total value locked when USDC is withdrawn from Aave
      * @param amount Amount withdrawn
      * Requirements:
-     * - Caller must be admin
+     * - Caller must have permission
      */
-    function recordWithdrawal(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recordWithdrawal(uint256 amount) external {
+        // Allow calls from USDCManager or admin
+        require(
+            msg.sender == address(usdcManager) || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            "Caller is not authorized"
+        );
+        
         if (amount > totalValueLocked) {
             totalValueLocked = 0;
         } else {
@@ -237,5 +250,16 @@ contract YieldManager is AccessControl, ReentrancyGuard {
         lastATokenBalance = aaveToken.balanceOf(address(this));
         
         emit TotalValueLockedUpdated(totalValueLocked);
+    }
+    
+    /**
+     * @dev Sets the USDCManager contract address
+     * @param _usdcManager Address of the USDCManager contract
+     * Requirements:
+     * - Caller must be admin
+     */
+    function setUSDCManager(address _usdcManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_usdcManager != address(0), "Invalid address");
+        usdcManager = _usdcManager;
     }
 }

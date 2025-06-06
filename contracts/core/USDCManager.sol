@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/IAavePool.sol";
 import "../interfaces/IHonorToken.sol";
+import "../interfaces/IYieldManager.sol";
 
 /**
  * @title USDCManager
@@ -87,20 +88,45 @@ contract USDCManager is AccessControl, ReentrancyGuard {
         // Deposit USDC to Aave
         aavePool.deposit(address(usdcToken), amount, address(this), 0);
         
+        // Get aToken address from YieldManager
+        address aTokenAddress;
+        if (yieldManager != address(0)) {
+            try IYieldManager(yieldManager).aaveToken() returns (IERC20 aToken) {
+                aTokenAddress = address(aToken);
+            } catch {
+                emit YieldManagerUpdateFailed("getAaveToken", amount);
+            }
+        }
+        
         // Mint HONOR tokens to user
         honorToken.mint(msg.sender, amount);
         
         // Update total value locked
         totalValueLocked += amount;
         
-        // Notify YieldManager of the deposit if set
-        if (yieldManager != address(0)) {
-            (bool success, ) = yieldManager.call(
-                abi.encodeWithSignature("recordDeposit(uint256)", amount)
-            );
-            // We don't revert if this fails, as it's not critical for the deposit flow
-            if (!success) {
-                emit YieldManagerUpdateFailed("recordDeposit", amount);
+        // Transfer aTokens to YieldManager and notify of the deposit if set
+        if (yieldManager != address(0) && aTokenAddress != address(0)) {
+            // Transfer aTokens to YieldManager
+            IERC20 aToken = IERC20(aTokenAddress);
+            uint256 aTokenBalance = aToken.balanceOf(address(this));
+            
+            // Make sure we have aTokens to transfer
+            if (aTokenBalance > 0) {
+                // Approve and transfer aTokens to YieldManager
+                aToken.approve(yieldManager, aTokenBalance);
+                
+                try aToken.transfer(yieldManager, aTokenBalance) {
+                    // Notify YieldManager of the deposit
+                    try IYieldManager(yieldManager).recordDeposit(amount) {
+                        // Success
+                    } catch {
+                        emit YieldManagerUpdateFailed("recordDeposit", amount);
+                    }
+                } catch {
+                    emit YieldManagerUpdateFailed("transferATokens", aTokenBalance);
+                }
+            } else {
+                emit YieldManagerUpdateFailed("noATokenBalance", 0);
             }
         }
         
@@ -118,6 +144,16 @@ contract USDCManager is AccessControl, ReentrancyGuard {
         require(amount > 0, "Amount must be greater than 0");
         require(amount <= totalValueLocked, "Insufficient USDC in pool");
         
+        // Get aToken address from YieldManager if set
+        address aTokenAddress;
+        if (yieldManager != address(0)) {
+            try IYieldManager(yieldManager).aaveToken() returns (IERC20 aToken) {
+                aTokenAddress = address(aToken);
+            } catch {
+                emit YieldManagerUpdateFailed("getAaveToken", amount);
+            }
+        }
+        
         // Withdraw USDC from Aave
         aavePool.withdraw(address(usdcToken), amount, address(this));
         
@@ -129,12 +165,21 @@ contract USDCManager is AccessControl, ReentrancyGuard {
         
         // Notify YieldManager of the withdrawal if set
         if (yieldManager != address(0)) {
-            (bool success, ) = yieldManager.call(
-                abi.encodeWithSignature("recordWithdrawal(uint256)", amount)
-            );
-            // We don't revert if this fails, as it's not critical for the withdrawal flow
-            if (!success) {
-                emit YieldManagerUpdateFailed("recordWithdrawal", amount);
+            // If we transferred aTokens to YieldManager, we need to handle withdrawal differently
+            if (aTokenAddress != address(0)) {
+                try IYieldManager(yieldManager).recordWithdrawal(amount) {
+                    // Success
+                } catch {
+                    emit YieldManagerUpdateFailed("recordWithdrawal", amount);
+                }
+            } else {
+                // Fallback to low-level call if aToken address not available
+                (bool success, ) = yieldManager.call(
+                    abi.encodeWithSignature("recordWithdrawal(uint256)", amount)
+                );
+                if (!success) {
+                    emit YieldManagerUpdateFailed("recordWithdrawal", amount);
+                }
             }
         }
         
