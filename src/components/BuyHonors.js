@@ -4,39 +4,21 @@ import { useWeb3 } from '../context/Web3Context';
 import * as ethers from 'ethers';
 import './BuyHonors.css';
 
-// Base RPC URL
-const BASE_RPC_URL = 'https://mainnet.base.org';
-
-// USDCManager ABI - just the function we need
-const USDC_MANAGER_ABI = [
-  "function depositUSDC(uint256 amount) returns (bool)"
-];
-
 // Base Mainnet addresses
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const USDC_MANAGER_ADDRESS = '0x53c31B1eE936Ec146bDa2A39A99853Ef9B9C664a';
 
-// USDCManager ABI - just the functions we need
-const USDCManagerABI = [
-  "function depositUSDC(uint256 amount)"
-];
-
-// USDC ABI - just the functions we need
-const USDC_ABI = [
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)"
-];
-
 const BuyHonors = () => {
   const { connected: isAuthenticated, providers } = useTomo();
-  const { contracts, refreshHonorBalance, usdcBalance, refreshUsdcBalance } = useWeb3();
+  const { refreshHonorBalance, usdcBalance, refreshUsdcBalance } = useWeb3();
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
-  const [txHash, setTxHash] = useState('');
   const [userAddress, setUserAddress] = useState('');
+  const [allowance, setAllowance] = useState('0');
+  const [isCheckingAllowance, setIsCheckingAllowance] = useState(false);
   
   // We're using the addresses defined at the top of the file
   // USDC_ADDRESS and USDC_MANAGER_ADDRESS
@@ -66,17 +48,127 @@ const BuyHonors = () => {
     getAddress();
   }, [providers, isAuthenticated]);
   
-  // Refresh USDC balance on component mount and when address changes
+  // Refresh USDC balance and check allowance on component mount and when address changes
   useEffect(() => {
     if (isAuthenticated && userAddress) {
       console.log('BuyHonors: Refreshing USDC balance');
       refreshUsdcBalance();
+      checkAllowance();
     }
   }, [isAuthenticated, userAddress, refreshUsdcBalance]);
   
   // Handle amount input change
   const handleAmountChange = (e) => {
     setAmount(e.target.value);
+  };
+  
+  // Check USDC allowance for USDCManager contract
+  const checkAllowance = async () => {
+    if (!isAuthenticated || !userAddress || !providers?.ethereumProvider) {
+      return;
+    }
+    
+    setIsCheckingAllowance(true);
+    
+    try {
+      console.log('Checking USDC allowance for USDCManager...');
+      
+      // Create the allowance function call data
+      const allowanceInterface = new ethers.Interface([
+        "function allowance(address owner, address spender) view returns (uint256)"
+      ]);
+      
+      const allowanceData = allowanceInterface.encodeFunctionData("allowance", [
+        userAddress,
+        USDC_MANAGER_ADDRESS
+      ]);
+      
+      // Call the USDC contract to get the allowance
+      const allowanceHex = await providers.ethereumProvider.request({
+        method: 'eth_call',
+        params: [{
+          to: USDC_ADDRESS,
+          data: allowanceData
+        }, 'latest']
+      });
+      
+      // Convert hex allowance to decimal
+      const allowanceValue = ethers.formatUnits(allowanceHex, 6); // USDC has 6 decimals
+      console.log('Current USDC allowance:', allowanceValue);
+      setAllowance(allowanceValue);
+    } catch (error) {
+      console.error('Error checking allowance:', error);
+      setAllowance('0');
+    } finally {
+      setIsCheckingAllowance(false);
+    }
+  };
+  
+  // Handle USDC approval
+  const handleApproveUSDC = async () => {
+    if (!isAuthenticated) {
+      setError('Please connect your wallet to approve USDC');
+      return;
+    }
+    
+    if (!userAddress) {
+      setError('Could not get your wallet address. Please reconnect your wallet.');
+      return;
+    }
+    
+    setIsApproving(true);
+    setError(null);
+    setSuccessMessage('');
+    
+    try {
+      // Get the Tomo SDK's Ethereum provider
+      if (!providers?.ethereumProvider) {
+        throw new Error('Tomo Ethereum provider not available');
+      }
+      
+      console.log('Approving USDC for USDCManager...');
+      
+      // Create the approval function call data
+      const approvalInterface = new ethers.Interface([
+        "function approve(address spender, uint256 amount) returns (bool)"
+      ]);
+      
+      // Approve a very large amount (max uint256)
+      const maxUint256 = ethers.MaxUint256;
+      
+      const approvalData = approvalInterface.encodeFunctionData("approve", [
+        USDC_MANAGER_ADDRESS,
+        maxUint256
+      ]);
+      
+      // Send the approval transaction
+      const approvalParams = {
+        from: userAddress,
+        to: USDC_ADDRESS,
+        data: approvalData,
+        value: '0x0',
+        gasLimit: '0x30000' // 196,608 gas
+      };
+      
+      console.log('Sending approval transaction with params:', approvalParams);
+      
+      // Use the sendTransaction method directly
+      const approvalResult = await providers.ethereumProvider.sendTransaction(approvalParams);
+      console.log('Approval transaction submitted:', approvalResult);
+      
+      setSuccessMessage('USDC approval successful! You can now buy Honors.');
+      
+      // Update allowance after approval
+      setTimeout(() => {
+        checkAllowance();
+      }, 3000); // Wait 3 seconds for the transaction to be mined
+      
+    } catch (error) {
+      console.error('Error approving USDC:', error);
+      setError(`Failed to approve USDC: ${error.message}`);
+    } finally {
+      setIsApproving(false);
+    }
   };
   
   // Handle buy honors
@@ -102,6 +194,13 @@ const BuyHonors = () => {
       return;
     }
     
+    // Check if user has approved enough USDC
+    const amountValue = parseFloat(amount);
+    if (parseFloat(allowance) < amountValue) {
+      setError(`Please approve USDC first. Current allowance: ${allowance} USDC`);
+      return;
+    }
+    
     setIsProcessing(true);
     setError(null);
     setSuccessMessage('');
@@ -119,8 +218,6 @@ const BuyHonors = () => {
       console.log('Contract addresses:', { USDC: USDC_ADDRESS, USDCManager: USDC_MANAGER_ADDRESS });
       console.log('User address:', userAddress);
       
-      // Skip approval and go directly to deposit
-      console.log('Bypassing approval step and going directly to deposit...');
       console.log('Amount in USDC:', amount);
       
       // Step 1: Deposit USDC to get HONOR tokens
@@ -195,12 +292,19 @@ const BuyHonors = () => {
       }
       
       // If we got here, one of the methods worked
-      setTxHash(depositResult);
+      // Store the transaction result (hash) in a local variable
+      const transactionHash = depositResult;
       
       // After successful deposit, refresh balances
       console.log('Deposit successful, refreshing balances...');
-      await refreshHonorBalance();
+      
+      // Wait a moment for the transaction to be processed
+      console.log('Waiting for transaction to be processed before refreshing balances...');
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+      
+      // Refresh USDC and Honor balances
       await refreshUsdcBalance();
+      await refreshHonorBalance();
       
       setSuccessMessage(`Successfully purchased ${amount} Honors!`);
       setAmount('');
@@ -272,15 +376,26 @@ const BuyHonors = () => {
             <div className="price-display">
               <p>Price: ${(parseFloat(amount) || 0).toFixed(2)} USD</p>
               <p className="price-note">1 Honor = $1 USD (USDC Balance: {parseFloat(usdcBalance || 0).toFixed(2)})</p>
+              <p className="allowance-note">USDC Allowance: {isCheckingAllowance ? 'Checking...' : `${parseFloat(allowance || 0).toFixed(2)}`}</p>
             </div>
             
-            <button 
-              className="buy-btn"
-              onClick={handleBuyHonors}
-              disabled={isProcessing || !amount}
-            >
-              {isProcessing ? 'Processing...' : 'Buy Honors'}
-            </button>
+            <div className="button-container">
+              <button 
+                className="approve-btn"
+                onClick={handleApproveUSDC}
+                disabled={isApproving || isProcessing}
+              >
+                {isApproving ? 'Approving...' : 'Approve USDC'}
+              </button>
+              
+              <button 
+                className="buy-btn"
+                onClick={handleBuyHonors}
+                disabled={isProcessing || !amount || parseFloat(allowance) < parseFloat(amount || 0)}
+              >
+                {isProcessing ? 'Processing...' : 'Buy Honors'}
+              </button>
+            </div>
             
             {error && <div className="error-message">{error}</div>}
             {successMessage && <div className="success-message">{successMessage}</div>}

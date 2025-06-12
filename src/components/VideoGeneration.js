@@ -44,7 +44,11 @@ const VideoGeneration = () => {
     
     if (!initialized || !contracts.videoManager || !contracts.honorToken) {
       setError('Smart contracts not initialized. Please check your connection and make sure you are on the Base network.');
-      console.error('Contract initialization issue:', { initialized, contracts });
+      console.error('Contract initialization issue:', { 
+        initialized, 
+        videoManager: contracts.videoManager?.target, 
+        honorToken: contracts.honorToken?.target 
+      });
       return;
     }
     
@@ -61,19 +65,23 @@ const VideoGeneration = () => {
       // First approve the VideoManager contract to spend HONOR tokens
       const honorTokenContract = contracts.honorToken;
       const videoManagerContract = contracts.videoManager;
-      const videoManagerAddress = videoManagerContract.address;
+      
+      // Get the video manager address from the contract target property
+      const videoManagerAddress = videoManagerContract.target;
+      console.log('VideoManager address:', videoManagerAddress);
       
       console.log('Approving HONOR tokens for VideoManager...');
       const approveTx = await honorTokenContract.approve(
         videoManagerAddress,
-        ethers.parseUnits(videoFee, 18)
+        ethers.parseUnits(videoFee, 6) // Honor token has 6 decimals
       );
       
       await approveTx.wait();
       console.log('Approval successful, creating video...');
       
-      // Now create the video with the prompt
-      const createVideoTx = await videoManagerContract.createVideo(prompt);
+      // Now create the video with the prompt using createOriginalVideo function
+      console.log('Creating original video with prompt:', prompt);
+      const createVideoTx = await videoManagerContract.createOriginalVideo(prompt);
       setTxHash(createVideoTx.hash);
       
       // Wait for transaction confirmation

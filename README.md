@@ -1,6 +1,7 @@
 # Honor Roll
 
-A decentralized platform for AI-generated video content with community voting and yield-generating staking rewards.
+A decentralized platform for AI-generated video content with community voting for Aave yield generated rewards.
+
 
 ## Overview
 

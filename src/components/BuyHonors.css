@@ -215,49 +215,73 @@
   margin: 0.5rem 0;
 }
 
-.price-note {
+.price-note, .allowance-note {
   font-size: 0.9rem !important;
   opacity: 0.8;
 }
 
-.buy-btn {
+.allowance-note {
+  color: #333;
+  font-weight: bold;
+  border-top: 1px dashed #333;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.button-container {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 1rem;
+}
+
+.approve-btn, .buy-btn {
   background-color: var(--accent-color);
   color: var(--text-color);
   border: 3px solid var(--text-color);
   border-radius: 15px;
-  padding: 1rem 2rem;
-  font-size: 1.4rem;
+  padding: 1rem 1rem;
+  font-size: 1.2rem;
   font-weight: bold;
   font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
   cursor: pointer;
   transition: all 0.3s;
-  display: block;
-  width: 100%;
+  flex: 1;
   box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
   position: relative;
   overflow: hidden;
+  text-align: center;
+}
+
+.approve-btn {
+  background-color: #4CAF50; /* Green */
 }
 
 .buy-btn::before {
   content: '🎖️';
-  margin-right: 10px;
+  margin-right: 5px;
 }
 
-.buy-btn:hover {
+.approve-btn::before {
+  content: '✅';
+  margin-right: 5px;
+}
+
+.buy-btn:hover, .approve-btn:hover {
   transform: translateY(-2px);
   box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
 }
 
-.buy-btn:active {
+.buy-btn:active, .approve-btn:active {
   transform: translateY(1px);
   box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
 }
 
-.buy-btn:disabled {
+.buy-btn:disabled, .approve-btn:disabled {
   background-color: #ccc;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  opacity: 0.7;
 }
 
 .error-message {
