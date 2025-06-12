@@ -427,7 +427,7 @@ export const Web3Provider = ({ children }) => {
     };
     
     initializeContracts();
-  }, [provider, connected, evmAddress]);
+  }, [provider, connected, evmAddress, providers, chainId]);
   
   // Update honor balance when contracts or wallet address changes
   useEffect(() => {

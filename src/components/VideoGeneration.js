@@ -25,6 +25,33 @@ const VideoGeneration = () => {
     setPrompt(e.target.value);
   };
 
+  // Effect to retry contract initialization if needed
+  useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const checkContracts = () => {
+      if (!initialized || !contracts.videoManager || !contracts.honorToken) {
+        if (retryCount < maxRetries) {
+          console.log(`VideoGeneration: Contracts not initialized, retrying (${retryCount + 1}/${maxRetries})...`);
+          retryCount++;
+          // Try again in 2 seconds
+          setTimeout(checkContracts, 2000);
+        } else {
+          console.error('VideoGeneration: Failed to initialize contracts after retries');
+        }
+      } else {
+        console.log('VideoGeneration: Contracts initialized successfully');
+        setError(null); // Clear any previous errors
+      }
+    };
+    
+    // Only start checking if we're authenticated
+    if (isAuthenticated) {
+      checkContracts();
+    }
+  }, [isAuthenticated, initialized, contracts]);
+
   // Generate video based on prompt
   const handleGenerateVideo = async () => {
     if (!isAuthenticated) {
@@ -43,7 +70,8 @@ const VideoGeneration = () => {
     }
     
     if (!initialized || !contracts.videoManager || !contracts.honorToken) {
-      setError('Smart contracts not initialized. Please check your connection and make sure you are on the Base network.');
+      // Try one more time to initialize contracts
+      setError('Smart contracts not initialized. Please wait a moment or refresh the page.');
       console.error('Contract initialization issue:', { 
         initialized, 
         videoManager: contracts.videoManager?.target, 
