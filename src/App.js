@@ -5,7 +5,6 @@ import VideoGeneration from './components/VideoGeneration';
 import Voting from './components/Voting';
 import BuyHonors from './components/BuyHonors';
 import AuthButton from './components/AuthButton';
-import BalanceDebugger from './components/BalanceDebugger';
 import { Web3Provider } from './context/Web3Context';
 
 function App() {
@@ -26,9 +25,6 @@ function App() {
                 <li>
                   <Link to="/buy">Buy Honors</Link>
                 </li>
-                <li>
-                  <Link to="/debug">Debug</Link>
-                </li>
               </ul>
             </nav>
             <AuthButton />
@@ -38,7 +34,6 @@ function App() {
               <Route path="/" element={<VideoGeneration />} />
               <Route path="/voting" element={<Voting />} />
               <Route path="/buy" element={<BuyHonors />} />
-              <Route path="/debug" element={<BalanceDebugger />} />
             </Routes>
           </main>
           <footer>
