@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useTomo } from '@tomo-inc/tomo-web-sdk';
+import { useWeb3 } from '../context/Web3Context';
+import * as ethers from 'ethers';
 import './VideoGeneration.css';
 
 const VideoGeneration = () => {
   const { connected: isAuthenticated, evmAddress: userAddress } = useTomo();
+  const { contracts, honorBalance, refreshHonorBalance, initialized, isLoading, error: web3Error } = useWeb3();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedVideo, setGeneratedVideo] = useState(null);
   const [error, setError] = useState(null);
+  const [videoFee, setVideoFee] = useState('20'); // Initialize to 20 HONOR tokens
+  const [txHash, setTxHash] = useState('');
+  
+  // Set video creation fee to 20 HONOR tokens
+  useEffect(() => {
+    // The fee is hardcoded to 20 HONOR tokens as per the contract
+    setVideoFee('20');
+  }, []);
 
   // Handle prompt input change
   const handlePromptChange = (e) => {
@@ -25,36 +36,79 @@ const VideoGeneration = () => {
       setError('Please enter a prompt');
       return;
     }
+    
+    if (isLoading) {
+      setError('Please wait while we connect to the blockchain...');
+      return;
+    }
+    
+    if (!initialized || !contracts.videoManager || !contracts.honorToken) {
+      setError('Smart contracts not initialized. Please check your connection and make sure you are on the Base network.');
+      console.error('Contract initialization issue:', { initialized, contracts });
+      return;
+    }
+    
+    // Check if user has enough HONOR tokens
+    if (parseFloat(honorBalance) < parseFloat(videoFee)) {
+      setError(`Insufficient HONOR balance. You need at least ${videoFee} HONOR tokens.`);
+      return;
+    }
 
     setIsGenerating(true);
     setError(null);
 
     try {
-      // In a real implementation, this would call your backend API
-      // For now, we'll simulate a video generation response
-      console.log('Generating video with prompt:', prompt);
+      // First approve the VideoManager contract to spend HONOR tokens
+      const honorTokenContract = contracts.honorToken;
+      const videoManagerContract = contracts.videoManager;
+      const videoManagerAddress = videoManagerContract.address;
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log('Approving HONOR tokens for VideoManager...');
+      const approveTx = await honorTokenContract.approve(
+        videoManagerAddress,
+        ethers.parseUnits(videoFee, 18)
+      );
       
-      // Mock response data
-      const mockVideoData = {
-        id: 'video_' + Date.now(),
+      await approveTx.wait();
+      console.log('Approval successful, creating video...');
+      
+      // Now create the video with the prompt
+      const createVideoTx = await videoManagerContract.createVideo(prompt);
+      setTxHash(createVideoTx.hash);
+      
+      // Wait for transaction confirmation
+      await createVideoTx.wait();
+      console.log('Video creation transaction confirmed!');
+      
+      // Refresh HONOR balance after spending tokens
+      await refreshHonorBalance();
+      
+      // In a real implementation, we would wait for the operator to upload to Livepeer
+      // and set the Livepeer link. For now, we'll simulate a response with placeholder data.
+      
+      // Get the latest video ID for this user
+      const videoCount = await videoManagerContract.getVideoCount();
+      const videoId = videoCount.toNumber() - 1;
+      
+      // Mock response data (in production this would come from the blockchain/backend)
+      const videoData = {
+        id: videoId.toString(),
         prompt: prompt,
-        url: 'https://example.com/video.mp4', // This would be a real video URL in production
+        url: 'https://lvpr.tv/?v=55171riihgrsbqw8', // Placeholder Livepeer URL
         choices: [
           { id: 'choice1', text: 'Option A: Continue the story' },
           { id: 'choice2', text: 'Option B: Take a different path' }
         ],
         creator: userAddress,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        txHash: createVideoTx.hash
       };
       
-      setGeneratedVideo(mockVideoData);
+      setGeneratedVideo(videoData);
       setPrompt('');
     } catch (err) {
       console.error('Error generating video:', err);
-      setError('Failed to generate video. Please try again.');
+      setError(`Failed to generate video: ${err.message || 'Please try again.'}`);
     } finally {
       setIsGenerating(false);
     }
@@ -68,15 +122,24 @@ const VideoGeneration = () => {
         <div className="auth-message">
           <p>Connect your wallet to create videos</p>
         </div>
+      ) : isLoading ? (
+        <div className="loading-message">
+          <p>Loading smart contracts...</p>
+        </div>
+      ) : web3Error ? (
+        <div className="error-message">
+          <p>{web3Error}</p>
+          <p>Please make sure you are connected to the Base network.</p>
+        </div>
       ) : (
         <>
           <div className="prompt-input-container">
-            <label htmlFor="prompt">Enter your prompt:</label>
+            <label htmlFor="prompt">✨ Enter your magical prompt:</label>
             <textarea
               id="prompt"
               value={prompt}
               onChange={handlePromptChange}
-              placeholder="Describe the video you want to generate..."
+              placeholder="Once upon a time in a digital world..."
               rows={4}
               disabled={isGenerating}
             />
@@ -85,7 +148,7 @@ const VideoGeneration = () => {
               onClick={handleGenerateVideo}
               disabled={isGenerating || !prompt.trim()}
             >
-              {isGenerating ? 'Generating...' : 'Generate Video'}
+              {isGenerating ? 'Generating...' : `Generate Video (${videoFee} HONOR)`}
             </button>
             {error && <div className="error-message">{error}</div>}
           </div>

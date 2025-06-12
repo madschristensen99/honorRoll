@@ -1,15 +1,57 @@
-# DreamScroll
+# Honor Roll Video Generation Service
 
-An AI-powered movie generation tool that creates short-form vertical videos with synchronized audio for mobile platforms.
+An AI-powered video generation service that listens for blockchain events and automatically creates videos when users request them through the Honor Roll smart contracts on Base.
 
 ## Features
 
+- **Blockchain Event Listener**: Listens for `VideoCreated` events from the Honor Roll VideoManager contract on Base
+- **Automatic Video Generation**: Processes video creation requests from the blockchain automatically
+- **Smart Contract Integration**: Sets the Livepeer link in the VideoManager contract after video generation
 - **AI-Generated Videos**: Creates videos in portrait orientation (9:16 aspect ratio) using fal.ai's text-to-video API
 - **AI-Generated Audio**: Produces dialogue and sound effects using Livepeer and ElevenLabs APIs
 - **Story Generation**: Creates engaging storylines using the Grok API
 - **Synchronized Media**: Automatically synchronizes audio and video durations
 - **Parallel Processing**: Generates video and audio concurrently for faster creation
 - **Modular Architecture**: Well-organized codebase with separate modules for different services
+
+## Setup and Usage
+
+### Prerequisites
+
+- Node.js v16 or higher
+- Access to the operator wallet private key (for the address 0xDFdC570ec0586D5c00735a2277c21Dcc254B3917)
+- API keys for Grok, ElevenLabs, Livepeer, and fal.ai
+
+### Environment Configuration
+
+1. Copy `.env.example` to `.env`
+2. Fill in all required API keys
+3. Add the operator wallet private key to `OPERATOR_PRIVATE_KEY`
+
+### Installation
+
+```bash
+npm install
+```
+
+### Running the Service
+
+```bash
+npm start
+```
+
+The service will start listening for `VideoCreated` events from the VideoManager contract on Base. When a user creates a video through the contract, the service will:
+
+1. Detect the event and extract the video ID, creator address, and prompt
+2. Generate a video based on the prompt using AI
+3. Upload the video to Livepeer
+4. Call the `setLivepeerLink` function on the VideoManager contract to set the video's Livepeer link
+
+### Flow Diagram
+
+```
+User -> VideoManager Contract -> VideoCreated Event -> Server Listener -> Generate Video -> Upload to Livepeer -> Set Livepeer Link in Contract
+```
 
 ## Technology Decisions
 

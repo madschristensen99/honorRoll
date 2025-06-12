@@ -5,12 +5,16 @@
 }
 
 .buy-honors-container h2 {
-  font-size: 2rem;
+  font-size: 2.5rem;
   margin-bottom: 2rem;
-  color: var(--text-color);
+  color: var(--primary-color);
   text-align: center;
   position: relative;
-  display: inline-block;
+  display: block;
+  font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+  text-shadow: 2px 2px 0 #fff, 3px 3px 0 var(--accent-color);
+  transform: rotate(-1deg);
+  letter-spacing: 1px;
 }
 
 .buy-honors-container h2::after {
@@ -20,34 +24,124 @@
 }
 
 .honors-info {
+  margin-bottom: 2rem;
   background-color: var(--secondary-color);
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.3);
+  border: 3px solid var(--accent-color);
+  max-width: 800px;
+  margin: 0 auto 2rem auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.honors-info::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: -50px;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+  animation: floating-light 8s infinite linear;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@keyframes floating-light {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(400px, 200px); }
+  50% { transform: translate(700px, 50px); }
+  75% { transform: translate(300px, 300px); }
+  100% { transform: translate(0, 0); }
+}
+
+.honors-headline {
+  font-family: 'Comic Sans MS', cursive;
+  font-size: 2.2rem;
+  color: #FFD700;
+  text-align: center;
+  margin-bottom: 1rem;
+  text-shadow: 2px 2px 0 #FF6347, 4px 4px 0 rgba(0, 0, 0, 0.3);
+  transform: rotate(-2deg);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: rotate(-2deg) scale(1); }
+  50% { transform: rotate(-2deg) scale(1.05); }
+  100% { transform: rotate(-2deg) scale(1); }
+}
+
+.honors-tagline {
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
+  color: white;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  text-align: center;
+  font-weight: bold;
+  font-style: italic;
+}
+
+.honors-benefits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.benefit-item {
+  background-color: rgba(255, 255, 255, 0.1);
   padding: 1.5rem;
   border-radius: 12px;
-  margin-bottom: 2rem;
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.1);
-  border: 3px solid var(--accent-color);
-}
-
-.honors-info p {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-}
-
-.honors-info ul {
-  list-style-type: none;
-  padding-left: 1rem;
-}
-
-.honors-info li {
-  margin-bottom: 0.5rem;
+  border: 2px dashed #FFD700;
+  transition: all 0.3s ease;
   position: relative;
-  padding-left: 1.5rem;
+  overflow: hidden;
 }
 
-.honors-info li::before {
-  content: '✨';
-  position: absolute;
-  left: 0;
+.benefit-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.benefit-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.benefit-item h4 {
+  color: #FFD700;
+  font-size: 1.3rem;
+  margin-bottom: 0.8rem;
+  text-align: center;
+  font-family: 'Comic Sans MS', cursive;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.benefit-item p {
+  color: white;
+  font-size: 1rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.honors-cta {
+  font-size: 1.5rem;
+  color: #FF6347;
+  text-align: center;
+  font-weight: bold;
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  font-family: 'Comic Sans MS', cursive;
+  transform: rotate(-1deg);
 }
 
 .buy-form {
@@ -64,28 +158,55 @@
 
 .amount-input-container label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.8rem;
   font-weight: bold;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
+  color: var(--primary-color);
+  font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+  text-shadow: 1px 1px 0 #fff;
+  transform: rotate(-1deg);
+  letter-spacing: 0.5px;
 }
 
 .amount-input-container input {
   width: 100%;
-  padding: 0.8rem;
-  font-size: 1.2rem;
-  border: 2px solid var(--accent-color);
-  border-radius: 8px;
-  background-color: white;
+  padding: 1rem;
+  font-size: 1.3rem;
+  border: 3px solid var(--text-color);
+  border-radius: 12px;
+  background-color: #fff9e6;
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.1);
+  font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+  transition: all 0.3s ease;
+}
+
+.amount-input-container input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(80, 0, 211, 0.2);
+  transform: scale(1.01);
 }
 
 .price-display {
   background-color: #FFD700;
   color: #333;
-  padding: 1rem;
-  border-radius: 8px;
+  padding: 1.2rem;
+  border-radius: 15px;
   margin-bottom: 1.5rem;
   text-align: center;
-  border: 2px dashed #333;
+  border: 3px dashed var(--primary-color);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.1);
+  position: relative;
+  transform: rotate(-1deg);
+}
+
+.price-display::before {
+  content: '💰';
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  font-size: 2rem;
+  transform: rotate(10deg);
 }
 
 .price-display p {
@@ -101,17 +222,25 @@
 
 .buy-btn {
   background-color: var(--accent-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
+  color: var(--text-color);
+  border: 3px solid var(--text-color);
+  border-radius: 15px;
   padding: 1rem 2rem;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   font-weight: bold;
+  font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
   cursor: pointer;
   transition: all 0.3s;
   display: block;
   width: 100%;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.buy-btn::before {
+  content: '🎖️';
+  margin-right: 10px;
 }
 
 .buy-btn:hover {

@@ -59,18 +59,35 @@
 
 .prompt-input-container label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+  margin-bottom: 0.8rem;
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--primary-color);
+  text-shadow: 1px 1px 0 #fff;
+  transform: rotate(-1deg);
+  letter-spacing: 0.5px;
 }
 
 .prompt-input-container textarea {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 3px solid var(--text-color);
+  border-radius: 12px;
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
   resize: vertical;
+  background-color: #fff9e6;
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.1);
+  font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+  min-height: 120px;
+  transition: all 0.3s ease;
+}
+
+.prompt-input-container textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(80, 0, 211, 0.2);
+  transform: scale(1.01);
 }
 
 .generate-btn {

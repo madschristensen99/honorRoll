@@ -75,8 +75,6 @@
 .user-balance {
   display: flex;
   align-items: center;
-  background-color: #FFD700; /* Gold color for Honors */
-  color: #333;
   padding: 0.5rem 1rem;
   border-radius: 8px;
   margin-right: 1rem;
@@ -86,8 +84,24 @@
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
 }
 
-.user-balance::before {
+.honor-balance {
+  background-color: #FFD700; /* Gold color for Honors */
+  color: #333;
+}
+
+.honor-balance::before {
   content: '🎖'; /* Trophy emoji for Honors */
+  margin-right: 8px;
+  font-size: 1.2rem;
+}
+
+.eth-balance {
+  background-color: #627EEA; /* Ethereum blue color */
+  color: white;
+}
+
+.eth-balance::before {
+  content: '⚡'; /* Lightning emoji for ETH */
   margin-right: 8px;
   font-size: 1.2rem;
 }
@@ -100,6 +114,37 @@
 .balance-amount {
   font-weight: bold;
   font-size: 1.1rem;
+}
+
+.switch-network-btn {
+  background-color: #FF6347; /* Tomato red */
+  color: white;
+  border: 2px solid white;
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+  margin-left: 10px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2);
+  animation: pulse 1.5s infinite;
+}
+
+.switch-network-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.switch-network-btn:active {
+  transform: scale(0.95);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 .auth-error {
