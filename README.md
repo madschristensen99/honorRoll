@@ -149,7 +149,7 @@ git clone https://github.com/madschristensen99/honorRoll.git
 
 # Install dependencies
 cd honorRoll
-npm install
+npm install --legacy-peer-deps
 
 # Start development server
 npm start
