@@ -56,6 +56,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
     event IPRegistered(uint256 indexed videoId, string livepeerLink);
     event IPIdReceived(uint256 indexed videoId, string ipId);
     event VideoIPRegistered(uint256 indexed videoId, string ipId);
+    event TestFunctionCalled(address caller, string message);
     
     // Roles
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -99,24 +100,22 @@ contract VideoManager is AccessControl, ReentrancyGuard {
     
     /**
      * @dev Create a new original video (not a sequel)
-     * @param creator Address of the video creator
      * @param prompt Description/prompt of the video
      * Requirements:
-     * - Creator must have approved this contract to spend their HONOR
+     * - Caller must have approved this contract to spend their HONOR
      */
     function createOriginalVideo(
-        address creator,
         string memory prompt
     ) external payable nonReentrant returns (uint256) {
         require(msg.value >= 0.001 ether, "Must include 0.001 ETH for deBridge fee");
-        // Check that creator has enough HONOR tokens
-        require(honorToken.balanceOf(creator) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
+        // Check that caller has enough HONOR tokens
+        require(honorToken.balanceOf(msg.sender) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
         
-        // Check that creator has approved this contract to spend their HONOR tokens
-        require(honorToken.allowance(creator, address(this)) >= VIDEO_CREATION_COST, "Insufficient HONOR allowance");
+        // Check that caller has approved this contract to spend their HONOR tokens
+        require(honorToken.allowance(msg.sender, address(this)) >= VIDEO_CREATION_COST, "Insufficient HONOR allowance");
         
-        // Burn HONOR tokens from creator
-        honorToken.burnFrom(creator, VIDEO_CREATION_COST);
+        // Burn HONOR tokens from caller
+        honorToken.burnFrom(msg.sender, VIDEO_CREATION_COST);
         
         // Withdraw USDC from Aave and send to operator
         usdcManager.withdrawForVideo(VIDEO_CREATION_COST, operatorWallet);
@@ -125,7 +124,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         uint256 videoId = nextVideoId++;
         videos[videoId] = Video({
             id: videoId,
-            creator: creator,
+            creator: msg.sender,
             nextVideoId: 0,
             isOriginal: true,
             sequenceHead: videoId, // Self-reference for original videos
@@ -140,22 +139,20 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         
         // Video will be registered with Story Protocol after Livepeer link is set
         
-        emit VideoCreated(videoId, creator, true, videoId, prompt);
+        emit VideoCreated(videoId, msg.sender, true, videoId, prompt);
         
         return videoId;
     }
     
     /**
      * @dev Create a sequel video
-     * @param creator Address of the video creator
      * @param originalVideoId ID of the original video this is a sequel to
      * @param prompt Description/prompt of the video
      * Requirements:
-     * - Creator must have approved this contract to spend their HONOR
+     * - Caller must have approved this contract to spend their HONOR
      * - Original video must exist
      */
     function createSequelVideo(
-        address creator,
         uint256 originalVideoId,
         string memory prompt
     ) external payable nonReentrant returns (uint256) {
@@ -168,14 +165,14 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         uint256 sequenceHead = originalVideo.isOriginal ? originalVideoId : originalVideo.sequenceHead;
         require(sequenceHead != 0, "Invalid sequence head");
         
-        // Check that creator has enough HONOR tokens
-        require(honorToken.balanceOf(creator) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
+        // Check that caller has enough HONOR tokens
+        require(honorToken.balanceOf(msg.sender) >= VIDEO_CREATION_COST, "Insufficient HONOR balance");
         
-        // Check that creator has approved this contract to spend their HONOR tokens
-        require(honorToken.allowance(creator, address(this)) >= VIDEO_CREATION_COST, "Insufficient HONOR allowance");
+        // Check that caller has approved this contract to spend their HONOR tokens
+        require(honorToken.allowance(msg.sender, address(this)) >= VIDEO_CREATION_COST, "Insufficient HONOR allowance");
         
-        // Burn HONOR tokens from creator
-        honorToken.burnFrom(creator, VIDEO_CREATION_COST);
+        // Burn HONOR tokens from caller
+        honorToken.burnFrom(msg.sender, VIDEO_CREATION_COST);
         
         // Withdraw USDC from Aave
         usdcManager.withdrawForVideo(VIDEO_CREATION_COST, address(this));
@@ -195,7 +192,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         uint256 videoId = nextVideoId++;
         videos[videoId] = Video({
             id: videoId,
-            creator: creator,
+            creator: msg.sender,
             nextVideoId: 0,
             isOriginal: false,
             sequenceHead: sequenceHead,
@@ -215,7 +212,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         
         // This would be implemented by the VotingManager, which would call YieldManager
         
-        emit VideoCreated(videoId, creator, false, sequenceHead, prompt);
+        emit VideoCreated(videoId, msg.sender, false, sequenceHead, prompt);
         
         return videoId;
     }

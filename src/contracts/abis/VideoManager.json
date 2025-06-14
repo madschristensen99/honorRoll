@@ -278,11 +278,6 @@
 	{
 		"inputs": [
 			{
-				"internalType": "address",
-				"name": "creator",
-				"type": "address"
-			},
-			{
 				"internalType": "string",
 				"name": "prompt",
 				"type": "string"
@@ -301,11 +296,6 @@
 	},
 	{
 		"inputs": [
-			{
-				"internalType": "address",
-				"name": "creator",
-				"type": "address"
-			},
 			{
 				"internalType": "uint256",
 				"name": "originalVideoId",

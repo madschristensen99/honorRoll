@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useTomo } from '@tomo-inc/tomo-web-sdk';
 import { useWeb3 } from '../context/Web3Context';
 import * as ethers from 'ethers';
+import contractAddresses from '../contracts/addresses';
 import './BuyHonors.css';
 
-// Base Mainnet addresses
-const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const USDC_MANAGER_ADDRESS = '0x7bcF5F9180858437b6008F26757bA70baD963b54';
+// Base Mainnet chain ID
+const BASE_CHAIN_ID = 8453;
 
 const BuyHonors = () => {
   const { connected: isAuthenticated, providers } = useTomo();
@@ -20,8 +20,8 @@ const BuyHonors = () => {
   const [allowance, setAllowance] = useState('0');
   const [isCheckingAllowance, setIsCheckingAllowance] = useState(false);
   
-  // We're using the addresses defined at the top of the file
-  // USDC_ADDRESS and USDC_MANAGER_ADDRESS
+  // We're using the addresses from the centralized addresses.js file
+  // Access them via contractAddresses[BASE_CHAIN_ID].USDC_TOKEN and contractAddresses[BASE_CHAIN_ID].USDC_MANAGER
   
   // Get the user's address when the component mounts or when the provider changes
   useEffect(() => {
@@ -80,14 +80,14 @@ const BuyHonors = () => {
       
       const allowanceData = allowanceInterface.encodeFunctionData("allowance", [
         userAddress,
-        USDC_MANAGER_ADDRESS
+        contractAddresses[BASE_CHAIN_ID].USDC_MANAGER
       ]);
       
       // Call the USDC contract to get the allowance
       const allowanceHex = await providers.ethereumProvider.request({
         method: 'eth_call',
         params: [{
-          to: USDC_ADDRESS,
+          to: contractAddresses[BASE_CHAIN_ID].USDC_TOKEN,
           data: allowanceData
         }, 'latest']
       });
@@ -137,14 +137,14 @@ const BuyHonors = () => {
       const maxUint256 = ethers.MaxUint256;
       
       const approvalData = approvalInterface.encodeFunctionData("approve", [
-        USDC_MANAGER_ADDRESS,
+        contractAddresses[BASE_CHAIN_ID].USDC_MANAGER,
         maxUint256
       ]);
       
       // Send the approval transaction
       const approvalParams = {
         from: userAddress,
-        to: USDC_ADDRESS,
+        to: contractAddresses[BASE_CHAIN_ID].USDC_TOKEN,
         data: approvalData,
         value: '0x0',
         gasLimit: '0x30000' // 196,608 gas
@@ -215,7 +215,10 @@ const BuyHonors = () => {
       }
       
       console.log('Using Tomo Ethereum provider with address:', userAddress);
-      console.log('Contract addresses:', { USDC: USDC_ADDRESS, USDCManager: USDC_MANAGER_ADDRESS });
+      console.log('Contract addresses:', { 
+        USDC: contractAddresses[BASE_CHAIN_ID].USDC_TOKEN, 
+        USDCManager: contractAddresses[BASE_CHAIN_ID].USDC_MANAGER 
+      });
       console.log('User address:', userAddress);
       
       console.log('Amount in USDC:', amount);
@@ -246,7 +249,7 @@ const BuyHonors = () => {
         // Send the deposit transaction using Tomo SDK's sendTransaction method
         const depositParams = {
           from: userAddress,
-          to: USDC_MANAGER_ADDRESS,
+          to: contractAddresses[BASE_CHAIN_ID].USDC_MANAGER,
           data: depositData,
           value: '0x0',
           gasLimit: '0x100000' // Significantly higher gas limit (1,048,576 gas)
@@ -275,7 +278,7 @@ const BuyHonors = () => {
         
         const tx = {
           from: userAddress,
-          to: USDC_MANAGER_ADDRESS,
+          to: contractAddresses[BASE_CHAIN_ID].USDC_MANAGER,
           data: fallbackData,
           value: '0x0',
           gas: '0x100000' // Using gas instead of gasLimit for the request method

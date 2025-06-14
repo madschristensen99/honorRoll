@@ -284,23 +284,66 @@ const VideoGeneration = () => {
         throw new Error('VideoManager contract address not available');
       }
       
-      // Prepare transaction parameters
-      const transactionParameters = {
-        to: videoManagerAddress,
-        from: userAddress,
-        data: data,
-        value: '0x38D7EA4C68000', // 0.001 ETH in hex (required for deBridge fee)
-        gasLimit: '0x30000' // 196,608 gas - same as in BuyHonors component
-      };
-      
-      console.log('Sending video generation transaction with parameters:', transactionParameters);
-      
-      // Send the transaction using the Tomo SDK provider
-      const txHash = await providers.ethereumProvider.sendTransaction(transactionParameters);
-      
-      console.log('Video generation transaction sent:', txHash);
-      setTxHash(txHash);
-      setSuccessMessage('Video generation transaction submitted successfully!');
+      // Try a different approach - use the contract instance directly
+      try {
+        console.log('Attempting to use contract instance directly...');
+        
+        // First check HONOR balance directly
+        const honorBalance = await contracts.honorToken.balanceOf(userAddress);
+        console.log('Current HONOR balance:', ethers.formatUnits(honorBalance, 6));
+        console.log('Required HONOR:', videoFee);
+        
+        // Check allowance directly
+        const currentAllowance = await contracts.honorToken.allowance(userAddress, videoManagerAddress);
+        console.log('Current allowance:', ethers.formatUnits(currentAllowance, 6));
+        
+        // Try to get a signer from the provider
+        console.log('Getting signer from provider...');
+        const provider = new ethers.BrowserProvider(providers.ethereumProvider);
+        const signer = await provider.getSigner();
+        console.log('Got signer:', await signer.getAddress());
+        
+        // Create a contract instance with the signer
+        console.log('Creating contract instance with signer...');
+        const videoManagerContract = new ethers.Contract(
+          videoManagerAddress,
+          [
+            'function createOriginalVideo(string prompt) external payable returns (uint256)'
+          ],
+          signer
+        );
+        
+        console.log('Calling createOriginalVideo directly on contract...');
+        // Call the function directly on the contract with the value
+        const tx = await videoManagerContract.createOriginalVideo(
+          prompt,
+          { 
+            value: ethers.parseEther('0.001'),
+            gasLimit: ethers.toBigInt('0x100000') // 1,048,576 gas
+          }
+        );
+        
+        console.log('Transaction sent:', tx.hash);
+        const txHash = tx.hash;
+        console.log('Video generation transaction sent:', txHash);
+        
+        setTxHash(txHash);
+        setSuccessMessage('Video generation transaction submitted successfully!');
+      } catch (txError) {
+        // Extract the revert reason if available
+        console.error('Transaction error details:', txError);
+        
+        if (txError.data) {
+          console.error('Error data:', txError.data);
+        }
+        
+        if (txError.message) {
+          console.error('Error message:', txError.message);
+          throw new Error(`Transaction failed: ${txError.message}`);
+        } else {
+          throw txError;
+        }
+      }
 
       // Refresh HONOR balance and allowance after transaction
       refreshHonorBalance();

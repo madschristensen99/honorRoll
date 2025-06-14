@@ -11,15 +11,9 @@ import USDCManagerABI from '../contracts/abis/USDCManager.json';
 import YieldManagerABI from '../contracts/abis/YieldManager.json';
 import CrossChainBridgeABI from '../contracts/abis/CrossChainBridge.json';
 
-// Hardcoded fallback addresses for Base Mainnet (chain ID 8453)
-// These are used if the addresses from the addresses.js file are not available
-const BASE_MAINNET_HONOR_TOKEN_ADDRESS = '0xb23a6DE2030A6B5C28853457484Ac069a6390F0B';
-const BASE_MAINNET_VIDEO_MANAGER_ADDRESS = '0x6783f7C740B90B50477B9C9E985E633E98C28267';
-const BASE_MAINNET_VOTING_MANAGER_ADDRESS = '0xDCca32B20F0F99FF61EE411552f47E707FE9C797';
-const BASE_MAINNET_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const BASE_MAINNET_USDC_MANAGER_ADDRESS = '0x7bcF5F9180858437b6008F26757bA70baD963b54';
-const BASE_MAINNET_YIELD_MANAGER_ADDRESS = '0x2832b2C69849Da7b8593698c7339359c40527292';
-const BASE_MAINNET_CROSS_CHAIN_BRIDGE_ADDRESS = '0xE625cf71d3d1DED720a29685bdCF47C2C63075bD';
+// Get addresses from contractAddresses import
+// These are used if the direct contract instances are not available
+const BASE_CHAIN_ID = 8453; // Base Mainnet chain ID
 
 // Custom RPC URL from .env file
 const CUSTOM_RPC_URL = process.env.REACT_APP_BASE_RPC_URL || 'https://lb.drpc.org/ogrpc?network=base&dkey=AmNgmLfXikwWhpaarzWUjEmU59gkRdwR8ImsKlzbRHZc';
@@ -46,7 +40,6 @@ const USDC_ABI = [
 const Web3Context = createContext();
 
 // Base network constants
-const BASE_CHAIN_ID = 8453;
 const BASE_NETWORK_NAME = 'Base Mainnet';
 
 export const Web3Provider = ({ children }) => {
@@ -251,21 +244,17 @@ export const Web3Provider = ({ children }) => {
           // Use Base Mainnet (8453) as fallback
           currentChainId = BASE_CHAIN_ID;
         }
-        console.log('Web3Context: Found contract addresses for chain', currentChainId);
         
-        // Get addresses for the current chain or use hardcoded fallbacks
-        const contractAddressesForChain = contractAddresses[currentChainId] || {};
+        // Get contract addresses for the current chain
+        const honorTokenAddress = contractAddresses[currentChainId]?.HONOR_TOKEN;
+        const videoManagerAddress = contractAddresses[currentChainId]?.VIDEO_MANAGER;
+        const votingManagerAddress = contractAddresses[currentChainId]?.VOTING_MANAGER;
+        const usdcManagerAddress = contractAddresses[currentChainId]?.USDC_MANAGER;
+        const yieldManagerAddress = contractAddresses[currentChainId]?.YIELD_MANAGER;
+        const crossChainBridgeAddress = contractAddresses[currentChainId]?.CROSS_CHAIN_BRIDGE;
+        const usdcTokenAddress = contractAddresses[currentChainId]?.USDC_TOKEN;
         
-        // Use addresses from config or fallback to hardcoded addresses
-        const honorTokenAddress = contractAddressesForChain.HONOR_TOKEN || BASE_MAINNET_HONOR_TOKEN_ADDRESS;
-        const videoManagerAddress = contractAddressesForChain.VIDEO_MANAGER || BASE_MAINNET_VIDEO_MANAGER_ADDRESS;
-        const votingManagerAddress = contractAddressesForChain.VOTING_MANAGER || BASE_MAINNET_VOTING_MANAGER_ADDRESS;
-        const usdcManagerAddress = contractAddressesForChain.USDC_MANAGER || BASE_MAINNET_USDC_MANAGER_ADDRESS;
-        const yieldManagerAddress = contractAddressesForChain.YIELD_MANAGER || BASE_MAINNET_YIELD_MANAGER_ADDRESS;
-        const crossChainBridgeAddress = contractAddressesForChain.CROSS_CHAIN_BRIDGE || BASE_MAINNET_CROSS_CHAIN_BRIDGE_ADDRESS;
-        const usdcTokenAddress = contractAddressesForChain.USDC_TOKEN || BASE_MAINNET_USDC_ADDRESS;
-        
-        console.log('Web3Context: Using contract addresses:', {
+        console.log('Web3Context: Using contract addresses', {
           honorToken: honorTokenAddress,
           videoManager: videoManagerAddress,
           votingManager: votingManagerAddress,
@@ -511,8 +500,8 @@ export const Web3Provider = ({ children }) => {
       const currentChainId = Number(network.chainId);
       console.log('Web3Context: Chain ID from custom provider:', currentChainId);
       
-      // Use our hardcoded address if needed
-      const honorTokenAddress = contractAddresses[currentChainId]?.HONOR_TOKEN || BASE_MAINNET_HONOR_TOKEN_ADDRESS;
+      // Use address from the current chain or fallback to Base Mainnet
+      const honorTokenAddress = contractAddresses[currentChainId]?.HONOR_TOKEN || contractAddresses[BASE_CHAIN_ID]?.HONOR_TOKEN;
       console.log('Honor token address:', honorTokenAddress);
       
       if (!honorTokenAddress) {
@@ -652,16 +641,16 @@ export const Web3Provider = ({ children }) => {
       console.log('Web3Context: Contract addresses from config:', contractAddresses);
       console.log('Web3Context: Current chain ID:', currentChainId);
       console.log('Web3Context: USDC_TOKEN from config:', contractAddresses[currentChainId]?.USDC_TOKEN);
-      console.log('Web3Context: Hardcoded USDC address:', BASE_MAINNET_USDC_ADDRESS);
+      console.log('Web3Context: Base Mainnet USDC address:', contractAddresses[BASE_CHAIN_ID]?.USDC_TOKEN);
       
       // Make sure we have a valid USDC address
       let usdcAddress = null;
       if (contractAddresses[currentChainId]?.USDC_TOKEN) {
         usdcAddress = contractAddresses[currentChainId].USDC_TOKEN;
         console.log('Web3Context: Using USDC address from config:', usdcAddress);
-      } else if (BASE_MAINNET_USDC_ADDRESS) {
-        usdcAddress = BASE_MAINNET_USDC_ADDRESS;
-        console.log('Web3Context: Using hardcoded USDC address:', usdcAddress);
+      } else if (contractAddresses[BASE_CHAIN_ID]?.USDC_TOKEN) {
+        usdcAddress = contractAddresses[BASE_CHAIN_ID].USDC_TOKEN;
+        console.log('Web3Context: Using Base Mainnet USDC address as fallback:', usdcAddress);
       } else {
         console.error('Web3Context: No valid USDC address available');
         return usdcBalance;
