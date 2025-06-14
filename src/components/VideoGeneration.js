@@ -152,8 +152,8 @@ const VideoGeneration = () => {
         throw new Error('VideoManager contract address not available');
       }
       
-      // Calculate the approval amount (using a large number to avoid frequent approvals)
-      const approvalAmount = ethers.parseUnits('1000000', 6); // 1,000,000 HONOR tokens with 6 decimals
+      // Calculate the approval amount (just enough for one video creation)
+      const approvalAmount = ethers.parseUnits('20', 6); // 20 HONOR tokens with 6 decimals
       
       // Get the HonorToken contract interface for encoding the function call
       const honorTokenInterface = new ethers.Interface([
