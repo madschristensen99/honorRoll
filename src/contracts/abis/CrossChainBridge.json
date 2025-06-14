@@ -1,32 +1,6 @@
 [
 	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_deBridgeGate",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_baseChainId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_storyChainId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "address",
-				"name": "_storyBridgeAddress",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "admin",
-				"type": "address"
-			}
-		],
+		"inputs": [],
 		"stateMutability": "nonpayable",
 		"type": "constructor"
 	},
@@ -338,6 +312,19 @@
 	},
 	{
 		"inputs": [],
+		"name": "callProxyAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "deBridgeGate",
 		"outputs": [
 			{
@@ -347,6 +334,72 @@
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "srcChainId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "srcAddress",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "executeMessage",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "extractIPIdFromResponse",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "ipId",
+				"type": "string"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "extractMessageMetadata",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "messageKey",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "videoId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "pure",
 		"type": "function"
 	},
 	{
@@ -405,6 +458,19 @@
 				"internalType": "bool",
 				"name": "",
 				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "ipAssetRegistryAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",
@@ -527,6 +593,19 @@
 		"type": "function"
 	},
 	{
+		"inputs": [],
+		"name": "royaltyModuleAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "bytes32",
@@ -556,19 +635,6 @@
 		"name": "setVideoManager",
 		"outputs": [],
 		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "storyBridgeAddress",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -619,6 +685,19 @@
 		"name": "syncIPOwnership",
 		"outputs": [],
 		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_callProxyAddress",
+				"type": "address"
+			}
+		],
+		"name": "updateCallProxy",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{

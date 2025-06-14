@@ -174,7 +174,8 @@ const VideoGeneration = () => {
         to: honorTokenAddress,
         from: userAddress,
         data: data,
-        gas: '0x186A0', // 100,000 gas limit
+        value: '0x0',
+        gasLimit: '0x30000' // 196,608 gas - same as in BuyHonors component
       };
       
       console.log('Sending approval transaction with parameters:', transactionParameters);
@@ -288,7 +289,8 @@ const VideoGeneration = () => {
         to: videoManagerAddress,
         from: userAddress,
         data: data,
-        gas: '0x186A0', // 100,000 gas limit
+        value: '0x38D7EA4C68000', // 0.001 ETH in hex (required for deBridge fee)
+        gasLimit: '0x30000' // 196,608 gas - same as in BuyHonors component
       };
       
       console.log('Sending video generation transaction with parameters:', transactionParameters);

@@ -1,0 +1,157 @@
+# Honor Roll Smart Contract Deployment and Configuration Guide
+
+This guide outlines the step-by-step process for deploying and configuring the Honor Roll smart contract ecosystem on the Base network.
+
+## Contract Deployment Order
+
+1. **HonorToken**
+   - Deploy with no constructor parameters
+   - Do NOT send any ETH with the deployment transaction
+
+2. **USDCManager**
+   - Deploy with constructor parameters:
+     - USDC token address: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+     - HonorToken address: [Your deployed HonorToken address]
+     - Aave Pool address: [Base Aave Pool address]
+     - Operator wallet: [Your wallet address]
+
+3. **YieldManager**
+   - Deploy with constructor parameters:
+     - USDC token address: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+     - Aave Pool address: [Base Aave Pool address]
+     - Aave Token address: [Base aUSDC address]
+     - Operator wallet: [Your wallet address]
+
+4. **VotingManager**
+   - Deploy with constructor parameters:
+     - HonorToken address: [Your deployed HonorToken address]
+     - Operator wallet: [Your wallet address]
+
+5. **CrossChainBridge**
+   - Deploy with constructor parameters:
+     - deBridge Gate address: 0xc1656B63D9EEbA6d114f6bE19565177893e5bCBF
+     - deBridge CallProxy address: 0x8a0C79F5532f3b2a16AD1E4282A5DAF81928a824
+     - IP Asset Registry address: 0x77319B4031e6eF1250907aa00018B8B1c67a244b
+     - Royalty Module address: 0xD2f60c40fEbccf6311f8B47c4f2Ec6b040400086
+     - Story Protocol chain ID: 100000013
+     - Operator wallet: [Your wallet address]
+
+6. **VideoManager**
+   - Deploy with constructor parameters:
+     - HonorToken address: [Your deployed HonorToken address]
+     - USDCManager address: [Your deployed USDCManager address]
+     - YieldManager address: [Your deployed YieldManager address]
+     - Operator wallet: [Your wallet address]
+
+## Contract Configuration Steps
+
+After deployment, you must configure the contracts with the following steps:
+
+### 1. Configure USDCManager
+
+1. Call `setYieldManager(address)` with:
+   - YieldManager address: [Your deployed YieldManager address]
+
+2. Call `setHonorToken(address)` with:
+   - HonorToken address: [Your deployed HonorToken address]
+
+3. Call `grantRole(bytes32, address)` with:
+   - Role: VIDEO_CREATOR_ROLE() (call this function first to get the bytes32 value)
+   - Account: [Your deployed VideoManager address]
+
+### 2. Configure YieldManager
+
+1. Call `setUSDCManager(address)` with:
+   - USDCManager address: [Your deployed USDCManager address]
+
+### 3. Configure VideoManager
+
+1. Call `setCrossBridgeAddress(address)` with:
+   - CrossChainBridge address: [Your deployed CrossChainBridge address]
+
+2. Call `setUSDCManager(address)` with:
+   - USDCManager address: [Your deployed USDCManager address]
+
+3. Call `setHonorToken(address)` with:
+   - HonorToken address: [Your deployed HonorToken address]
+
+### 4. Configure VotingManager
+
+1. Call `setVideoManager(address)` with:
+   - VideoManager address: [Your deployed VideoManager address]
+
+2. Call `setHonorToken(address)` with:
+   - HonorToken address: [Your deployed HonorToken address]
+
+3. Call `setYieldManager(address)` with:
+   - YieldManager address: [Your deployed YieldManager address]
+
+### 5. Configure CrossChainBridge
+
+1. Call `setVideoManager(address)` with:
+   - VideoManager address: [Your deployed VideoManager address]
+
+### 6. Configure HonorToken Roles
+
+1. Call `grantRole(bytes32, address)` with:
+   - Role: MINTER_ROLE() (call this function first to get the bytes32 value)
+   - Account: [Your deployed USDCManager address]
+
+2. Call `grantRole(bytes32, address)` with:
+   - Role: BURNER_ROLE() (call this function first to get the bytes32 value)
+   - Account: [Your deployed VideoManager address]
+
+## Testing the Deployment
+
+### 1. Test USDC Deposit
+
+1. Approve the USDCManager to spend your USDC:
+   - Call `approve(address, uint256)` on the USDC token contract with:
+     - Spender: [Your deployed USDCManager address]
+     - Amount: [Amount in USDC with 6 decimals]
+
+2. Call `depositUSDC(uint256)` on USDCManager with:
+   - Amount: [Amount in USDC with 6 decimals]
+
+### 2. Test Video Creation
+
+1. Approve the VideoManager to spend your HONOR tokens:
+   - Call `approve(address, uint256)` on the HonorToken contract with:
+     - Spender: [Your deployed VideoManager address]
+     - Amount: [At least 20000000 (20 HONOR with 6 decimals)]
+
+2. Call `createOriginalVideo(address, string)` on VideoManager with:
+   - Creator: [Your wallet address]
+   - Prompt: [Your video prompt]
+   - Value: 0.001 ETH (for deBridge fee)
+   - Gas limit: 300000
+
+## Troubleshooting
+
+If you encounter issues with video creation:
+
+1. Verify all roles are correctly assigned:
+   - Check that VideoManager has VIDEO_CREATOR_ROLE in USDCManager
+   - Check that VideoManager has BURNER_ROLE in HonorToken
+   - Check that USDCManager has MINTER_ROLE in HonorToken
+
+2. Verify all contract addresses are correctly set:
+   - Check USDCManager.yieldManager() returns the correct address
+   - Check VideoManager.usdcManager() returns the correct address
+   - Check VideoManager.crossChainBridge() returns the correct address
+
+3. Check token balances and approvals:
+   - Verify you have sufficient HONOR tokens (at least 20)
+   - Verify you've approved VideoManager to spend your HONOR tokens
+
+4. Ensure you're sending 0.001 ETH with the createOriginalVideo transaction
+
+## Contract Addresses (Base Mainnet)
+
+- HonorToken: 0xb23a6DE2030A6B5C28853457484Ac069a6390F0B
+- VideoManager: 0x6783f7C740B90B50477B9C9E985E633E98C28267
+- VotingManager: 0xDCca32B20F0F99FF61EE411552f47E707FE9C797
+- USDCManager: 0x7bcF5F9180858437b6008F26757bA70baD963b54
+- YieldManager: 0x2832b2C69849Da7b8593698c7339359c40527292
+- CrossChainBridge: 0xE625cf71d3d1DED720a29685bdCF47C2C63075bD
+- USDC Token (Base): 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913

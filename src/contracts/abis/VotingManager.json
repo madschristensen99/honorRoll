@@ -10,11 +10,6 @@
 				"internalType": "address",
 				"name": "_yieldManager",
 				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "admin",
-				"type": "address"
 			}
 		],
 		"stateMutability": "nonpayable",

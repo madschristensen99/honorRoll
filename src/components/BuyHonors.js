@@ -6,7 +6,7 @@ import './BuyHonors.css';
 
 // Base Mainnet addresses
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const USDC_MANAGER_ADDRESS = '0x53c31B1eE936Ec146bDa2A39A99853Ef9B9C664a';
+const USDC_MANAGER_ADDRESS = '0x7bcF5F9180858437b6008F26757bA70baD963b54';
 
 const BuyHonors = () => {
   const { connected: isAuthenticated, providers } = useTomo();

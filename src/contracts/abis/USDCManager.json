@@ -3,27 +3,7 @@
 		"inputs": [
 			{
 				"internalType": "address",
-				"name": "_usdcToken",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
 				"name": "_honorToken",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "_aavePool",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "_operatorWallet",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "admin",
 				"type": "address"
 			}
 		],

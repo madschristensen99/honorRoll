@@ -45,29 +45,21 @@ contract YieldManager is AccessControl, ReentrancyGuard {
     
     /**
      * @dev Constructor
-     * @param _aavePool Address of the Aave lending pool
-     * @param _usdcToken Address of the USDC token contract
-     * @param _operatorWallet Address of the operator wallet
-     * @param admin Address that will have admin rights
+     * The deployer address will have admin rights
      */
-    constructor(
-        address _aavePool,
-        address _usdcToken,
-        address _aaveToken,
-        address _operatorWallet,
-        address admin
-    ) {
-        aavePool = IAavePool(_aavePool);
-        usdcToken = IERC20(_usdcToken);
-        aaveToken = IERC20(_aaveToken);
-        operatorWallet = _operatorWallet;
+    constructor() {
+        // Hardcoded addresses for Base Mainnet
+        aavePool = IAavePool(0xA238Dd80C259a72e81d7e4664a9801593F98d1c5); // Base Aave Pool
+        usdcToken = IERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913); // Base USDC
+        aaveToken = IERC20(0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB); // Base aUSDC
+        operatorWallet = msg.sender;
         lastYieldCollectionTime = block.timestamp;
         
         // Initialize last aToken balance
         lastATokenBalance = aaveToken.balanceOf(address(this));
         
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(YIELD_DISTRIBUTOR_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(YIELD_DISTRIBUTOR_ROLE, msg.sender);
     }
     
     /**
@@ -261,5 +253,73 @@ contract YieldManager is AccessControl, ReentrancyGuard {
     function setUSDCManager(address _usdcManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_usdcManager != address(0), "Invalid address");
         usdcManager = _usdcManager;
+    }
+    
+    /**
+     * @dev Withdraws USDC from Aave and sends it to the specified address
+     * @param amount Amount of USDC to withdraw
+     * @param to Address to send USDC to
+     * Requirements:
+     * - Caller must be USDCManager or admin
+     */
+    function withdrawUSDCForVideo(uint256 amount, address to) external nonReentrant {
+        // Only USDCManager or admin can call this
+        require(
+            msg.sender == address(usdcManager) || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            "Caller is not authorized"
+        );
+        
+        // Withdraw USDC from Aave
+        aavePool.withdraw(address(usdcToken), amount, address(this));
+        
+        // Transfer USDC to the specified address
+        require(usdcToken.transfer(to, amount), "USDC transfer failed");
+        
+        // Update accounting inline
+        if (amount > totalValueLocked) {
+            totalValueLocked = 0;
+        } else {
+            totalValueLocked -= amount;
+        }
+        
+        // Update the last aToken balance after withdrawal
+        lastATokenBalance = aaveToken.balanceOf(address(this));
+        
+        emit TotalValueLockedUpdated(totalValueLocked);
+    }
+    
+    /**
+     * @dev Emergency function to recover aTokens and withdraw USDC
+     * @param amount Amount of USDC to withdraw
+     * @param to Address to send USDC to
+     * Requirements:
+     * - Caller must be admin
+     */
+    function emergencyWithdraw(uint256 amount, address to) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+        // Withdraw USDC from Aave
+        aavePool.withdraw(address(usdcToken), amount, address(this));
+        
+        // Transfer USDC to the specified address
+        require(usdcToken.transfer(to, amount), "USDC transfer failed");
+        
+        // Update accounting inline
+        if (amount > totalValueLocked) {
+            totalValueLocked = 0;
+        } else {
+            totalValueLocked -= amount;
+        }
+        
+        // Update the last aToken balance after withdrawal
+        lastATokenBalance = aaveToken.balanceOf(address(this));
+        
+        emit TotalValueLockedUpdated(totalValueLocked);
+    }
+    
+    /**
+     * @dev Get the current aToken balance
+     * @return Current aToken balance
+     */
+    function getATokenBalance() external view returns (uint256) {
+        return aaveToken.balanceOf(address(this));
     }
 }

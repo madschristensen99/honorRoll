@@ -55,19 +55,17 @@ contract VotingManager is AccessControl, ReentrancyGuard {
      * @dev Constructor
      * @param _honorToken Address of the HONOR token contract
      * @param _yieldManager Address of the yield manager contract
-     * @param admin Address that will have admin rights
      */
     constructor(
         address _honorToken,
-        address _yieldManager,
-        address admin
+        address _yieldManager
     ) {
         honorToken = IHonorToken(_honorToken);
         yieldManager = IYieldManager(_yieldManager);
         
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(POLL_CREATOR_ROLE, admin);
-        _grantRole(POLL_FINALIZER_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(POLL_CREATOR_ROLE, msg.sender);
+        _grantRole(POLL_FINALIZER_ROLE, msg.sender);
     }
     
     /**

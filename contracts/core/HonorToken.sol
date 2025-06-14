@@ -22,12 +22,12 @@ contract HonorToken is ERC20, AccessControl, ReentrancyGuard {
     
     /**
      * @dev Constructor
-     * @param admin Address that will have admin rights
+     * The deployer address will have admin rights
      */
-    constructor(address admin) ERC20("Honor", "HONOR") {
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(MINTER_ROLE, admin);
-        _grantRole(BURNER_ROLE, admin);
+    constructor() ERC20("Honor", "HONOR") {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+        _grantRole(BURNER_ROLE, msg.sender);
     }
     
     /**

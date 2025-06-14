@@ -15,21 +15,6 @@
 				"internalType": "address",
 				"name": "_yieldManager",
 				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "_storyProtocol",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "_operatorWallet",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "admin",
-				"type": "address"
 			}
 		],
 		"stateMutability": "nonpayable",
@@ -207,6 +192,25 @@
 		"type": "event"
 	},
 	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "videoId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "ipId",
+				"type": "string"
+			}
+		],
+		"name": "VideoIPRegistered",
+		"type": "event"
+	},
+	{
 		"inputs": [],
 		"name": "BRIDGE_CALLBACK_ROLE",
 		"outputs": [
@@ -292,7 +296,7 @@
 				"type": "uint256"
 			}
 		],
-		"stateMutability": "nonpayable",
+		"stateMutability": "payable",
 		"type": "function"
 	},
 	{
@@ -321,7 +325,7 @@
 				"type": "uint256"
 			}
 		],
-		"stateMutability": "nonpayable",
+		"stateMutability": "payable",
 		"type": "function"
 	},
 	{
@@ -441,6 +445,11 @@
 						"internalType": "string",
 						"name": "ipId",
 						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "bridgeFee",
+						"type": "uint256"
 					}
 				],
 				"internalType": "struct VideoManager.Video",
@@ -590,6 +599,24 @@
 			},
 			{
 				"internalType": "string",
+				"name": "ipId",
+				"type": "string"
+			}
+		],
+		"name": "setIPId",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "videoId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
 				"name": "livepeerLink",
 				"type": "string"
 			}
@@ -708,6 +735,11 @@
 				"internalType": "string",
 				"name": "ipId",
 				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "bridgeFee",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",

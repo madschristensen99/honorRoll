@@ -42,4 +42,24 @@ interface IYieldManager {
      * @param amount Amount withdrawn
      */
     function recordWithdrawal(uint256 amount) external;
+    
+    /**
+     * @dev Withdraws USDC from Aave and sends it to the specified address
+     * @param amount Amount of USDC to withdraw
+     * @param to Address to send USDC to
+     */
+    function withdrawUSDCForVideo(uint256 amount, address to) external;
+    
+    /**
+     * @dev Emergency function to recover aTokens and withdraw USDC
+     * @param amount Amount of USDC to withdraw
+     * @param to Address to send USDC to
+     */
+    function emergencyWithdraw(uint256 amount, address to) external;
+    
+    /**
+     * @dev Get the current aToken balance
+     * @return Current aToken balance
+     */
+    function getATokenBalance() external view returns (uint256);
 }

@@ -6,6 +6,14 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/IDeBridgeGate.sol";
 
 /**
+ * @title IVideoManager
+ * @dev Interface for VideoManager contract
+ */
+interface IVideoManager {
+    function setIPId(uint256 videoId, string calldata ipId) external;
+}
+
+/**
  * @title CrossChainBridge
  * @dev Manages cross-chain communication between Base and Story Protocol chains
  * Uses deBridge for trustless message passing
@@ -18,7 +26,9 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
     IDeBridgeGate public deBridgeGate;
     uint256 public baseChainId;
     uint256 public storyChainId;
-    address public storyBridgeAddress;
+    address public ipAssetRegistryAddress;
+    address public royaltyModuleAddress;
+    address public callProxyAddress;
     address public videoManager;
     
     // Message tracking
@@ -43,26 +53,20 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
     
     /**
      * @dev Constructor
-     * @param _deBridgeGate Address of the deBridge gate contract
-     * @param _baseChainId Chain ID of the Base network
-     * @param _storyChainId Chain ID of the Story Protocol network
-     * @param _storyBridgeAddress Address of the bridge contract on Story Protocol chain
-     * @param admin Address that will have admin rights
+     * The deployer address will have admin rights
      */
-    constructor(
-        address _deBridgeGate,
-        uint256 _baseChainId,
-        uint256 _storyChainId,
-        address _storyBridgeAddress,
-        address admin
-    ) {
-        deBridgeGate = IDeBridgeGate(_deBridgeGate);
-        baseChainId = _baseChainId;
-        storyChainId = _storyChainId;
-        storyBridgeAddress = _storyBridgeAddress;
+    constructor() {
+        // Hardcoded addresses and chain IDs for Base and Story Protocol
+        deBridgeGate = IDeBridgeGate(0xc1656B63D9EEBa6d114f6bE19565177893e5bCBF); // deBridge gate on Base
+        baseChainId = 8453; // Base Mainnet
+        storyChainId = 100000013; // Story Protocol chain ID in deBridge format
+        // Using the correct addresses from deploymentAddresses.js
+        ipAssetRegistryAddress = 0x77319B4031e6eF1250907aa00018B8B1c67a244b; // IP_ASSET_REGISTRY address
+        royaltyModuleAddress = 0xD2f60c40fEbccf6311f8B47c4f2Ec6b040400086; // ROYALTY_MODULE address
+        callProxyAddress = 0x8a0C79F5532f3b2a16AD1E4282A5DAF81928a824; // deBridge CallProxy (same on all chains)
         
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(BRIDGE_OPERATOR_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(BRIDGE_OPERATOR_ROLE, msg.sender);
     }
     
     /**
@@ -95,15 +99,40 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
     ) external payable onlyRole(BRIDGE_OPERATOR_ROLE) nonReentrant {
         require(msg.value >= SUBMISSION_FEE, "Insufficient fee");
         
-        // Encode message data
-        bytes memory data = abi.encode(
-            REGISTER_IP_ASSET,
-            videoId,
+        // Prepare the function call data for Story Protocol's registerIpAsset function
+        string memory parentIpId = "";
+        if (!isOriginal && originalVideoId > 0) {
+            parentIpId = videoIpIds[originalVideoId];
+        }
+        
+        // Create the calldata for Story Protocol's IP Asset Registry registerIpAsset function
+        bytes memory storyProtocolCallData = abi.encodeWithSignature(
+            "registerIpAsset(address,string,bool,string)",
             creator,
             ipfsHash,
             isOriginal,
-            originalVideoId
+            parentIpId
         );
+        
+        // For CallProxy, we need to prepare the call parameters
+        // The CallProxy.call function expects (address _reserveAddress, address _receiver, bytes _data, uint256 _flags, bytes _nativeSender, uint256 _chainIdFrom)
+        bytes memory callProxyData = abi.encodeWithSignature(
+            "call(address,address,bytes,uint256,bytes,uint256)",
+            address(this),                // _reserveAddress (fallback if call fails)
+            ipAssetRegistryAddress,       // _receiver (IP Asset Registry)
+            storyProtocolCallData,        // _data (function call data)
+            uint256(0),                   // _flags
+            abi.encodePacked(address(this)), // _nativeSender
+            baseChainId                   // _chainIdFrom
+        );
+        
+        // Store video ID in a mapping for later use when we receive the callback with the IP ID
+        // This is necessary to associate the IP ID with the correct video ID
+        bytes32 messageKey = keccak256(abi.encode(REGISTER_IP_ASSET, videoId, block.timestamp));
+        sentMessages[messageKey] = true;
+        
+        // Encode the complete message data for CallProxy with additional metadata for tracking
+        bytes memory data = abi.encode(callProxyData, messageKey, videoId);
         
         // Send cross-chain message
         bytes32 messageId = sendCrossChainMessage(data);
@@ -127,13 +156,35 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
         require(msg.value >= SUBMISSION_FEE, "Insufficient fee");
         require(creators.length == shares.length, "Array length mismatch");
         
-        // Encode message data
-        bytes memory data = abi.encode(
-            UPDATE_ROYALTY_INFO,
-            videoId,
+        // Get the IP ID for the video
+        string memory ipId = videoIpIds[videoId];
+        require(bytes(ipId).length > 0, "IP ID not found for video");
+        
+        // Create the calldata for Story Protocol's Royalty Module setRoyaltyInfo function
+        bytes memory storyProtocolCallData = abi.encodeWithSignature(
+            "setRoyaltyInfo(string,address[],uint256[])",
+            ipId,
             creators,
             shares
         );
+        
+        // For CallProxy, we need to prepare the call parameters
+        bytes memory callProxyData = abi.encodeWithSignature(
+            "call(address,address,bytes,uint256,bytes,uint256)",
+            address(this),                // _reserveAddress (fallback if call fails)
+            royaltyModuleAddress,         // _receiver (Royalty Module)
+            storyProtocolCallData,        // _data (function call data)
+            uint256(0),                   // _flags
+            abi.encodePacked(address(this)), // _nativeSender
+            baseChainId                   // _chainIdFrom
+        );
+        
+        // Store video ID in a mapping for later use when we receive the callback
+        bytes32 messageKey = keccak256(abi.encode(UPDATE_ROYALTY_INFO, videoId, block.timestamp));
+        sentMessages[messageKey] = true;
+        
+        // Encode the complete message data for CallProxy with additional metadata for tracking
+        bytes memory data = abi.encode(callProxyData, messageKey, videoId);
         
         // Send cross-chain message
         bytes32 messageId = sendCrossChainMessage(data);
@@ -169,13 +220,38 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
     
     /**
      * @dev Send a cross-chain message using deBridge
-     * @param data Encoded message data
+     * @param data Encoded message data for CallProxy
      * @return messageId ID of the sent message
      */
     function sendCrossChainMessage(bytes memory data) internal returns (bytes32) {
+        // Extract the callProxyData from the encoded data
+        // The data format is: abi.encode(callProxyData, messageKey, videoId)
+        bytes memory callProxyData;
+        
+        // Extract the callProxyData from the first part of the encoded data
+        assembly {
+            // Load the first 32 bytes which contain the offset to the callProxyData
+            let offset := mload(add(data, 32))
+            // Calculate the position of the callProxyData in memory
+            let dataPos := add(data, offset)
+            // Get the length of the callProxyData
+            let dataLen := mload(dataPos)
+            // Allocate memory for callProxyData
+            callProxyData := mload(0x40)
+            // Update free memory pointer
+            mstore(0x40, add(add(callProxyData, 0x20), dataLen))
+            // Store the length of callProxyData
+            mstore(callProxyData, dataLen)
+            // Copy the callProxyData
+            let i := 0
+            for { } lt(i, dataLen) { i := add(i, 32) } {
+                mstore(add(add(callProxyData, 0x20), i), mload(add(add(dataPos, 0x20), i)))
+            }
+        }
+        
         // Prepare deBridge submission
-        // Calculate execution fee based on gas price and estimated gas usage
-        uint256 executionFee = 200000 * tx.gasprice; // Estimate 200k gas for execution
+        // Use correct fee for Base chain
+        uint256 executionFee = 0.001 ether; // Base chain fee
         
         IDeBridgeGate.SubmissionAutoParamsTo memory autoParams = IDeBridgeGate.SubmissionAutoParamsTo({
             executionFee: executionFee,
@@ -184,11 +260,11 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
             data: data
         });
         
-        // Submit cross-chain transaction
+        // Submit cross-chain transaction using CallProxy
         bytes32 submissionId = deBridgeGate.sendAutoMessage{value: msg.value}(
             storyChainId,
-            abi.encodePacked(storyBridgeAddress),
-            data,
+            abi.encodePacked(callProxyAddress),
+            callProxyData, // Use the extracted callProxyData
             autoParams
         );
         
@@ -214,7 +290,7 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
         // Verify source chain and address
         require(srcChainId == storyChainId, "Invalid source chain");
         require(
-            keccak256(srcAddress) == keccak256(abi.encodePacked(storyBridgeAddress)),
+            keccak256(srcAddress) == keccak256(abi.encodePacked(callProxyAddress)),
             "Invalid source address"
         );
         
@@ -280,46 +356,140 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
     }
     
     /**
+     * @dev Extract IP ID from CallProxy response
+     * @param data Response data from CallProxy
+     * @return ipId The extracted IP ID
+     */
+    function extractIPIdFromResponse(bytes calldata data) external pure returns (string memory ipId) {
+        // The CallProxy response includes the return value from the Story Protocol IP Asset Registry
+        // The return value is a string (the IP ID)
+        // We need to extract this string from the response data
+        
+        // The response data format depends on the CallProxy implementation
+        // We expect the IP ID to be at a specific position in the response
+        
+        // First, check if the data is long enough to contain an IP ID
+        require(data.length >= 64, "Invalid response data");
+        
+        // Extract the IP ID from the response
+        // The IP ID is a string, so we need to extract its offset and length
+        uint256 ipIdOffset;
+        uint256 ipIdLength;
+        
+        // Extract the offset to the IP ID string
+        assembly {
+            // The offset is typically at position 32 in the response
+            ipIdOffset := calldataload(add(data.offset, 32))
+        }
+        
+        // Extract the length of the IP ID string
+        assembly {
+            // The length is at the position indicated by the offset
+            ipIdLength := calldataload(add(add(data.offset, ipIdOffset), 0))
+        }
+        
+        // Create a new bytes array to hold the IP ID string
+        bytes memory ipIdBytes = new bytes(ipIdLength);
+        
+        // Copy the IP ID string data
+        assembly {
+            // The string data starts after the length word
+            let ipIdData := add(add(data.offset, add(ipIdOffset, 32)), 0)
+            let ipIdBytesData := add(ipIdBytes, 32)
+            
+            // Copy the string data byte by byte
+            for { let i := 0 } lt(i, ipIdLength) { i := add(i, 1) } {
+                let b := byte(0, calldataload(add(ipIdData, i)))
+                mstore8(add(ipIdBytesData, i), b)
+            }
+        }
+        
+        return string(ipIdBytes);
+    }
+    
+    /**
+     * @dev Extract message metadata from CallProxy response
+     * @param data Response data from CallProxy
+     * @return messageKey The message key used to track the request
+     * @return videoId The video ID associated with the request
+     */
+    function extractMessageMetadata(bytes calldata data) external pure returns (bytes32 messageKey, uint256 videoId) {
+        // The CallProxy response includes our original metadata
+        // We need to extract the message key and video ID from the response
+        
+        // Check if the data is long enough to contain the metadata
+        require(data.length >= 96, "Invalid response data");
+        
+        // Extract the message key and video ID from the response
+        assembly {
+            // The message key is typically at position 64 in the response
+            messageKey := calldataload(add(data.offset, 64))
+            // The video ID is typically at position 96 in the response
+            videoId := calldataload(add(data.offset, 96))
+        }
+        
+        return (messageKey, videoId);
+    }
+    
+    /**
      * @dev Process IP asset registration confirmation
      * @param data Message data
      */
     function processIPAssetRegistration(bytes memory data) internal {
-        // Extract parameters individually using assembly to avoid array slicing
-        bytes32 messageType;
+        // The data format from CallProxy response is different from our original format
+        // We need to extract the IP ID from the response and match it with the original request
+        
+        // Extract the message key and video ID from the data
+        bytes32 messageKey;
         uint256 videoId;
-        bool success;
         string memory ipId;
         
-        // Extract message type (first 32 bytes)
-        assembly {
-            messageType := mload(add(data, 32))
-            videoId := mload(add(data, 64))
-            success := gt(mload(add(data, 96)), 0)
+        // First, try to extract the IP ID from the response data
+        // This is the return value from the Story Protocol IP Asset Registry
+        try this.extractIPIdFromResponse(data) returns (string memory extractedIpId) {
+            ipId = extractedIpId;
+        } catch {
+            // If extraction fails, emit event with failure
+            emit IPAssetRegistered(0, "", false);
+            return;
         }
         
-        // For the string, we need to extract it differently
-        // The string data starts at offset 128 (32*4) in the data array
-        // We'll use a separate function to extract the string from the data
-        ipId = extractStringFromData(data, 128);
+        // Extract the message key and video ID from the response metadata
+        // The CallProxy response should include our original metadata
+        try this.extractMessageMetadata(data) returns (bytes32 extractedKey, uint256 extractedVideoId) {
+            messageKey = extractedKey;
+            videoId = extractedVideoId;
+        } catch {
+            // If extraction fails, emit event with failure
+            emit IPAssetRegistered(0, ipId, false);
+            return;
+        }
         
-        // Ensure this is a registration message
-        require(messageType == REGISTER_IP_ASSET, "Invalid message type");
+        // Verify this message was sent by us
+        if (!sentMessages[messageKey]) {
+            emit IPAssetRegistered(videoId, ipId, false);
+            return;
+        }
         
-        if (success) {
-            // Store the IP ID
-            videoIpIds[videoId] = ipId;
-            
-            // Call back to VideoManager to update the IP ID
-            require(videoManager != address(0), "VideoManager not set");
-            
+        // Mark the message as processed
+        processedMessages[messageKey] = true;
+        
+        // Store the IP ID for the video
+        videoIpIds[videoId] = ipId;
+        
+        // Call back to VideoManager to update the IP ID
+        if (videoManager != address(0)) {
             // Call the VideoManager to update the IP ID
-            (bool callSuccess, ) = videoManager.call(
-                abi.encodeWithSignature("setIpId(uint256,string)", videoId, ipId)
-            );
-            require(callSuccess, "Failed to update IP ID in VideoManager");
+            try IVideoManager(videoManager).setIPId(videoId, ipId) {
+                // Success
+                emit IPAssetRegistered(videoId, ipId, true);
+            } catch {
+                // Failed to update VideoManager but we still have the IP ID
+                emit IPAssetRegistered(videoId, ipId, false);
+            }
+        } else {
+            emit IPAssetRegistered(videoId, ipId, true);
         }
-        
-        emit IPAssetRegistered(videoId, ipId, success);
     }
     
     /**
@@ -402,18 +572,71 @@ contract CrossChainBridge is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Update the Story Protocol bridge address
-     * @param _storyBridgeAddress Address of the bridge contract on Story Protocol chain
+     * @dev Update the address of the deBridge CallProxy contract
+     * @param _callProxyAddress Address of the CallProxy contract (same on all chains)
      * Requirements:
      * - Caller must be admin
      */
-    function updateStoryBridge(address _storyBridgeAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_storyBridgeAddress != address(0), "Invalid address");
-        storyBridgeAddress = _storyBridgeAddress;
+    function updateCallProxy(address _callProxyAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_callProxyAddress != address(0), "Invalid address");
+        callProxyAddress = _callProxyAddress;
     }
     
     /**
      * @dev Receive function to accept ETH
      */
     receive() external payable {}
+    
+    /**
+     * @dev Execute a message received from deBridge
+     * @param srcChainId Source chain ID
+     * @param srcAddress Source contract address
+     * @param data Message data
+     */
+    function executeMessage(
+        uint256 srcChainId,
+        bytes calldata srcAddress,
+        bytes calldata data
+    ) external {
+        // Verify the sender is deBridge
+        require(msg.sender == address(deBridgeGate), "Only deBridge can execute");
+        
+        // Verify the source chain is Story Protocol chain
+        require(srcChainId == storyChainId, "Invalid source chain");
+        
+        // Verify the source address is CallProxy
+        address sourceAddress = bytesToAddress(srcAddress);
+        require(sourceAddress == callProxyAddress, "Invalid source address");
+        
+        // Extract the message type from the data
+        bytes32 messageType;
+        assembly {
+            messageType := calldataload(add(data.offset, 32))
+        }
+        
+        // Process the message based on its type
+        if (messageType == REGISTER_IP_ASSET) {
+            processIPAssetRegistration(data);
+        } else if (messageType == UPDATE_ROYALTY_INFO) {
+            // Process royalty update confirmation
+            // Implementation depends on your specific requirements
+        } else if (messageType == SYNC_IP_OWNERSHIP) {
+            // Process ownership sync confirmation
+            // Implementation depends on your specific requirements
+        } else {
+            revert("Unknown message type");
+        }
+    }
+    
+    /**
+     * @dev Convert bytes to address
+     * @param _bytes Bytes to convert
+     * @return addr Converted address
+     */
+    function bytesToAddress(bytes calldata _bytes) internal pure returns (address addr) {
+        require(_bytes.length == 20, "Invalid address length");
+        assembly {
+            addr := shr(96, calldataload(_bytes.offset))
+        }
+    }
 }

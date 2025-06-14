@@ -30,6 +30,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         uint256 creationTime; // When the video was created
         bool registered;     // Whether registered with Story Protocol
         string ipId;         // Story Protocol IP ID when registered
+        uint256 bridgeFee;   // Stored fee for deBridge
     }
     
     // State variables
@@ -54,6 +55,7 @@ contract VideoManager is AccessControl, ReentrancyGuard {
     );
     event IPRegistered(uint256 indexed videoId, string livepeerLink);
     event IPIdReceived(uint256 indexed videoId, string ipId);
+    event VideoIPRegistered(uint256 indexed videoId, string ipId);
     
     // Roles
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -64,27 +66,24 @@ contract VideoManager is AccessControl, ReentrancyGuard {
      * @param _honorToken Address of the HONOR token contract
      * @param _usdcManager Address of the USDC manager contract
      * @param _yieldManager Address of the yield manager contract
-     * @param _storyProtocol Address of the Story Protocol interface
-     * @param _operatorWallet Address of the operator wallet
-     * @param admin Address that will have admin rights
      */
     constructor(
         address _honorToken,
         address _usdcManager,
-        address _yieldManager,
-        address _storyProtocol,
-        address _operatorWallet,
-        address admin
+        address _yieldManager
     ) {
         honorToken = IHonorToken(_honorToken);
         usdcManager = IUSDCManager(_usdcManager);
         yieldManager = IYieldManager(_yieldManager);
-        storyProtocol = IStoryProtocol(_storyProtocol);
-        operatorWallet = _operatorWallet;
         
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(OPERATOR_ROLE, admin);
-        _grantRole(OPERATOR_ROLE, operatorWallet);
+        // Hardcoded Story Protocol interface address
+        storyProtocol = IStoryProtocol(0x4F7a67464b5976D7547C860109e4432D50E90eEB);
+        
+        // Deployer is operator wallet
+        operatorWallet = msg.sender;
+        
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(OPERATOR_ROLE, msg.sender);
     }
     
     /**
@@ -135,11 +134,11 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             livepeerLink: "",  // Will be set by operator later
             creationTime: block.timestamp,
             registered: false,
-            ipId: ""
+            ipId: "",
+            bridgeFee: msg.value
         });
         
-        // Register with Story Protocol (async, will be marked as registered later)
-        registerWithStoryProtocol(videoId);
+        // Video will be registered with Story Protocol after Livepeer link is set
         
         emit VideoCreated(videoId, creator, true, videoId, prompt);
         
@@ -159,7 +158,8 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         address creator,
         uint256 originalVideoId,
         string memory prompt
-    ) external nonReentrant returns (uint256) {
+    ) external payable nonReentrant returns (uint256) {
+        require(msg.value >= 0.001 ether, "Must include 0.001 ETH for deBridge fee");
         // Verify original video exists
         Video storage originalVideo = videos[originalVideoId];
         require(originalVideo.id != 0, "Original video does not exist");
@@ -176,10 +176,6 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         
         // Burn HONOR tokens from creator
         honorToken.burnFrom(creator, VIDEO_CREATION_COST);
-        
-        // Calculate royalty distribution
-        Video storage headVideo = videos[sequenceHead];
-        uint256 sequenceLength = headVideo.sequenceLength;
         
         // Withdraw USDC from Aave
         usdcManager.withdrawForVideo(VIDEO_CREATION_COST, address(this));
@@ -208,16 +204,15 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             livepeerLink: "", // Will be set by operator later
             creationTime: block.timestamp,
             registered: false,
-            ipId: ""
+            ipId: "",
+            bridgeFee: msg.value
         });
         
         // Add to sequence
         addToSequence(sequenceHead, videoId);
         
-        // Register with Story Protocol (async, will be marked as registered later)
-        registerWithStoryProtocol(videoId);
+        // Video will be registered with Story Protocol after Livepeer link is set
         
-        // Distribute yield to winning voters of the previous video
         // This would be implemented by the VotingManager, which would call YieldManager
         
         emit VideoCreated(videoId, creator, false, sequenceHead, prompt);
@@ -315,8 +310,9 @@ contract VideoManager is AccessControl, ReentrancyGuard {
             video.isOriginal ? 0 : video.sequenceHead
         );
         
-        // Forward call to CrossChainBridge with the deBridge fee
-        (bool success, ) = crossChainBridge.call{value: msg.value}(callData);
+        // Forward call to CrossChainBridge with the stored deBridge fee
+        uint256 bridgeFee = video.bridgeFee;
+        (bool success, ) = crossChainBridge.call{value: bridgeFee}(callData);
         require(success, "Failed to call CrossChainBridge");
         
         // Mark as registration in progress
@@ -370,10 +366,28 @@ contract VideoManager is AccessControl, ReentrancyGuard {
         Video storage video = videos[videoId];
         require(video.id != 0, "Video does not exist");
         require(bytes(video.livepeerLink).length == 0, "Livepeer link already set");
+        require(video.bridgeFee >= 0.001 ether, "Bridge fee not stored");
         
         video.livepeerLink = livepeerLink;
         
         // Now that we have the video link, register with Story Protocol
         registerWithStoryProtocol(videoId);
+    }
+    
+    /**
+     * @dev Set the IP ID for a video after registration with Story Protocol
+     * @param videoId ID of the video
+     * @param ipId ID of the IP asset on Story Protocol
+     * Requirements:
+     * - Caller must be the CrossChainBridge contract
+     * - Video must exist
+     */
+    function setIPId(uint256 videoId, string memory ipId) external {
+        require(msg.sender == crossChainBridge, "Only CrossChainBridge can set IP ID");
+        Video storage video = videos[videoId];
+        require(video.id != 0, "Video does not exist");
+        
+        video.ipId = ipId;
+        emit VideoIPRegistered(videoId, ipId);
     }
 }

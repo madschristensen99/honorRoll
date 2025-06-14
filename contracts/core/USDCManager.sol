@@ -39,26 +39,17 @@ contract USDCManager is AccessControl, ReentrancyGuard {
     
     /**
      * @dev Constructor
-     * @param _usdcToken Address of the USDC token contract
-     * @param _honorToken Address of the HONOR token contract
-     * @param _aavePool Address of the Aave lending pool
-     * @param _operatorWallet Address of the operator wallet
-     * @param admin Address that will have admin rights
+     * @param _honorToken Address of the HONOR token
      */
-    constructor(
-        address _usdcToken,
-        address _honorToken,
-        address _aavePool,
-        address _operatorWallet,
-        address admin
-    ) {
-        usdcToken = IERC20(_usdcToken);
+    constructor(address _honorToken) {
+        // Hardcoded addresses for Base Mainnet
+        usdcToken = IERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913); // Base USDC
         honorToken = IHonorToken(_honorToken);
-        aavePool = IAavePool(_aavePool);
-        operatorWallet = _operatorWallet;
+        aavePool = IAavePool(0xA238Dd80C259a72e81d7e4664a9801593F98d1c5); // Base Aave Pool
+        operatorWallet = msg.sender;
         
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(VIDEO_CREATOR_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(VIDEO_CREATOR_ROLE, msg.sender);
     }
     
     /**
@@ -144,42 +135,34 @@ contract USDCManager is AccessControl, ReentrancyGuard {
         require(amount > 0, "Amount must be greater than 0");
         require(amount <= totalValueLocked, "Insufficient USDC in pool");
         
-        // Get aToken address from YieldManager if set
-        address aTokenAddress;
-        if (yieldManager != address(0)) {
-            try IYieldManager(yieldManager).aaveToken() returns (IERC20 aToken) {
-                aTokenAddress = address(aToken);
+        // Check if we have enough USDC in the contract
+        uint256 usdcBalance = usdcToken.balanceOf(address(this));
+        
+        if (usdcBalance >= amount) {
+            // We have enough USDC, transfer directly
+            require(usdcToken.transfer(to, amount), "USDC transfer failed");
+        } else if (yieldManager != address(0)) {
+            // Not enough USDC, request from YieldManager
+            try IYieldManager(yieldManager).withdrawUSDCForVideo(amount, to) {
+                // Success - YieldManager will update its own accounting
             } catch {
-                emit YieldManagerUpdateFailed("getAaveToken", amount);
+                emit YieldManagerUpdateFailed("withdrawUSDCForVideo", amount);
+                revert("Failed to withdraw from YieldManager");
             }
+        } else {
+            revert("Insufficient USDC and no YieldManager set");
         }
-        
-        // Withdraw USDC from Aave
-        aavePool.withdraw(address(usdcToken), amount, address(this));
-        
-        // Transfer USDC to the specified address
-        require(usdcToken.transfer(to, amount), "USDC transfer failed");
         
         // Update total value locked
         totalValueLocked -= amount;
         
-        // Notify YieldManager of the withdrawal if set
-        if (yieldManager != address(0)) {
-            // If we transferred aTokens to YieldManager, we need to handle withdrawal differently
-            if (aTokenAddress != address(0)) {
-                try IYieldManager(yieldManager).recordWithdrawal(amount) {
-                    // Success
-                } catch {
-                    emit YieldManagerUpdateFailed("recordWithdrawal", amount);
-                }
-            } else {
-                // Fallback to low-level call if aToken address not available
-                (bool success, ) = yieldManager.call(
-                    abi.encodeWithSignature("recordWithdrawal(uint256)", amount)
-                );
-                if (!success) {
-                    emit YieldManagerUpdateFailed("recordWithdrawal", amount);
-                }
+        // No need to notify YieldManager as it handles the withdrawal itself when using withdrawUSDCForVideo
+        // Only need to notify if we handled the transfer ourselves
+        if (usdcBalance >= amount && yieldManager != address(0)) {
+            try IYieldManager(yieldManager).recordWithdrawal(amount) {
+                // Success
+            } catch {
+                emit YieldManagerUpdateFailed("recordWithdrawal", amount);
             }
         }
         
