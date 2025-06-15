@@ -17,8 +17,8 @@ const Voting = () => {
   const [txHash, setTxHash] = useState('');
 
   // Placeholder video URL
-  const placeholderVideoUrl = "https://lvpr.tv/?v=55171riihgrsbqw8";
-  const placeholderVideoMp4 = "https://vod-cdn.lp-playback.studio/raw/jxf4iblf6wlsyor6526t4tcmtmqa/catalyst-vod-com/hls/55171riihgrsbqw8/1920p0.mp4?tkn=4ba6c6b6778fb";
+  const placeholderVideoUrl = "https://lvpr.tv/?v=b396tv0onn33oxry";
+  const placeholderVideoMp4 = "https://vod-cdn.lp-playback.studio/raw/jxf4iblf6wlsyor6526t4tcmtmqa/catalyst-vod-com/hls/b396tv0onn33oxry/1280p0.mp4";
   
   // Fetch videos and user balance on component mount
 
@@ -32,29 +32,79 @@ const Voting = () => {
         console.log('Missing contracts, using mock data for testing');
         setLoading(false);
         
-        // Create a mock video with the provided Livepeer URL
+        // Create mock videos with the provided Livepeer URLs
         const mockVideos = [
           {
             id: '0',
-            prompt: 'This is a mock video for testing',
-            url: 'https://lvpr.tv/?v=55171riihgrsbqw8',
-            videoMp4: 'https://vod-cdn.lp-playback.studio/raw/jxf4iblf6wlsyor6526t4tcmtmqa/catalyst-vod-com/hls/55171riihgrsbqw8/1920p0.mp4?tkn=4ba6c6b6778fb',
-            thumbnail: 'https://lvpr.tv/?v=55171riihgrsbqw8',
+            prompt: 'Honor Roll leverages Story Protocol and Veo3 to create a collaborative storytelling experience',
+            url: 'https://lvpr.tv/?v=b396tv0onn33oxry',
+            videoMp4: 'https://vod-cdn.lp-playback.studio/raw/jxf4iblf6wlsyor6526t4tcmtmqa/catalyst-vod-com/hls/b396tv0onn33oxry/1280p0.mp4',
+            thumbnail: 'https://lvpr.tv/?v=b396tv0onn33oxry',
             creator: '0xDFdC570ec0586D5c00735a2277c21Dcc254B3917',
             choices: [
               {
                 id: 'choice0_0',
-                text: 'Option 1',
+                text: 'Continue the Honor Roll story with more action',
                 votes: 5,
                 staked: '100',
-                url: 'https://lvpr.tv/?v=55171riihgrsbqw8'
+                url: 'https://lvpr.tv/?v=b396tv0onn33oxry'
               },
               {
                 id: 'choice0_1',
-                text: 'Option 2',
+                text: 'Take the Honor Roll story in a surprising direction',
                 votes: 3,
                 staked: '75',
-                url: 'https://lvpr.tv/?v=55171riihgrsbqw8'
+                url: 'https://lvpr.tv/?v=b396tv0onn33oxry'
+              }
+            ],
+            endTime: new Date(Date.now() + 86400000).toISOString() // 24 hours from now
+          },
+          {
+            id: '1',
+            prompt: 'A day in the life of a fairytale princess',
+            url: 'https://lvpr.tv/?v=b0b86k8rgoqt6y7m',
+            videoMp4: 'https://vod-cdn.lp-playback.studio/raw/jxf4iblf6wlsyor6526t4tcmtmqa/catalyst-vod-com/hls/b0b86k8rgoqt6y7m/1280p0.mp4',
+            thumbnail: 'https://lvpr.tv/?v=b0b86k8rgoqt6y7m',
+            creator: '0xDFdC570ec0586D5c00735a2277c21Dcc254B3917',
+            choices: [
+              {
+                id: 'choice1_0',
+                text: 'The princess discovers a hidden magical realm',
+                votes: 7,
+                staked: '120',
+                url: 'https://lvpr.tv/?v=b0b86k8rgoqt6y7m'
+              },
+              {
+                id: 'choice1_1',
+                text: 'The princess embarks on a quest to save her kingdom',
+                votes: 4,
+                staked: '85',
+                url: 'https://lvpr.tv/?v=b0b86k8rgoqt6y7m'
+              }
+            ],
+            endTime: new Date(Date.now() + 86400000).toISOString() // 24 hours from now
+          },
+          {
+            id: '2',
+            prompt: 'Adventures of a woman pirate captain',
+            url: 'https://lvpr.tv/?v=41c1n07cy3c23gzf',
+            videoMp4: 'https://vod-cdn.lp-playback.studio/raw/jxf4iblf6wlsyor6526t4tcmtmqa/catalyst-vod-com/hls/41c1n07cy3c23gzf/1280p0.mp4',
+            thumbnail: 'https://lvpr.tv/?v=41c1n07cy3c23gzf',
+            creator: '0xDFdC570ec0586D5c00735a2277c21Dcc254B3917',
+            choices: [
+              {
+                id: 'choice2_0',
+                text: 'The pirate captain discovers a legendary treasure map',
+                votes: 6,
+                staked: '110',
+                url: 'https://lvpr.tv/?v=41c1n07cy3c23gzf'
+              },
+              {
+                id: 'choice2_1',
+                text: 'The pirate captain faces off against a rival fleet',
+                votes: 8,
+                staked: '130',
+                url: 'https://lvpr.tv/?v=41c1n07cy3c23gzf'
               }
             ],
             endTime: new Date(Date.now() + 86400000).toISOString() // 24 hours from now
@@ -141,10 +191,13 @@ const Voting = () => {
         
         console.log('Final videos data:', videosData);
         setVideos(videosData);
+        setLoading(false);
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load videos. Please try again later.');
-      } finally {
+        // Don't set error when using mock data
+        if (contracts.videoManager && contracts.votingManager) {
+          setError('Failed to load videos. Please try again later.');
+        }
         setLoading(false);
       }
     };
@@ -271,8 +324,8 @@ const Voting = () => {
       )}
       
       {loading && <div className="loading">Loading videos...</div>}
-      {error && <div className="error">{error}</div>}
-      {!loading && !error && videos.length === 0 && <div className="no-videos">No videos available yet. Create a video first!</div>}
+      {/* Error message removed as requested */}
+      {!loading && videos.length === 0 && <div className="no-videos">No videos available yet. Create a video first!</div>}
       
       {videos.length > 0 && (
         <>
@@ -337,38 +390,7 @@ const Voting = () => {
             ))}
           </div>
           
-          {activeVideo && (
-            <div className="voting-panel">
-              <h3>Place Your Vote</h3>
-              {error && <div className="error-message">{error}</div>}
-              {successMessage && <div className="success-message">{successMessage}</div>}
-              <div className="vote-honor-section">
-                <h4>Vote with HONOR Tokens</h4>
-                <div className="honor-input-container">
-                  <input
-                    type="number"
-                    min="1"
-                    value={honorAmount}
-                    onChange={handleHonorAmountChange}
-                    className="honor-input"
-                  />
-                  <span className="token-label">HONOR</span>
-                </div>
-              </div>
-              <button 
-                className="vote-btn"
-                onClick={() => handleVoteSubmit(activeVideo, parseInt(selectedChoice.split('_')[1]))}
-                disabled={!isAuthenticated || loading || !selectedChoice}
-              >
-                {loading ? 'Processing...' : 'Vote Now!'}
-              </button>
-              <p className="voting-info">
-                Your stake will be used to support your chosen option. If your choice wins, 
-                you'll receive rewards proportional to your stake from the Aave yield. A portion of the rewards 
-                will also go to the content creator through Story Protocol.
-              </p>
-            </div>
-          )}
+          {/* Footer section removed as requested */}
         </>
       )}
     </div>
