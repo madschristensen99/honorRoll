@@ -71,6 +71,10 @@ const VideoGeneration = () => {
         return;
       }
       
+      // Store the last known allowance value to prevent flashing to zero
+      let lastKnownAllowance = allowance;
+      let gotAllowance = false;
+      
       // Try to get the allowance using the contract's allowance method
       try {
         const allowanceValue = await contracts.honorToken.allowance(userAddress, videoManagerAddress);
@@ -78,41 +82,49 @@ const VideoGeneration = () => {
         
         console.log('Current HONOR token allowance:', formattedAllowance);
         setAllowance(formattedAllowance);
+        gotAllowance = true;
       } catch (contractError) {
         console.error('Error calling allowance method directly:', contractError);
         
         // Fallback: Try using eth_call directly
-        try {
-          // Encode the allowance function call
-          const honorTokenInterface = new ethers.Interface([
-            'function allowance(address owner, address spender) view returns (uint256)'
-          ]);
-          
-          const data = honorTokenInterface.encodeFunctionData('allowance', [userAddress, videoManagerAddress]);
-          
-          // Make the eth_call
-          const result = await providers.ethereumProvider.request({
-            method: 'eth_call',
-            params: [{
-              to: honorTokenAddress,
-              data: data
-            }, 'latest']
-          });
-          
-          // Decode the result
-          const decodedResult = honorTokenInterface.decodeFunctionResult('allowance', result);
-          const formattedAllowance = ethers.formatUnits(decodedResult[0], 6);
-          
-          console.log('Current HONOR token allowance (from eth_call):', formattedAllowance);
-          setAllowance(formattedAllowance);
-        } catch (fallbackError) {
-          console.error('Error in fallback allowance check:', fallbackError);
-          setAllowance('0');
+        if (!gotAllowance) {
+          try {
+            // Encode the allowance function call
+            const honorTokenInterface = new ethers.Interface([
+              'function allowance(address owner, address spender) view returns (uint256)'
+            ]);
+            
+            const data = honorTokenInterface.encodeFunctionData('allowance', [userAddress, videoManagerAddress]);
+            
+            // Make the eth_call
+            const result = await providers.ethereumProvider.request({
+              method: 'eth_call',
+              params: [{
+                to: honorTokenAddress,
+                data: data
+              }, 'latest']
+            });
+            
+            const decodedResult = honorTokenInterface.decodeFunctionResult('allowance', result);
+            const formattedAllowance = ethers.formatUnits(decodedResult[0], 6);
+            
+            console.log('Current HONOR token allowance (from eth_call):', formattedAllowance);
+            setAllowance(formattedAllowance);
+            gotAllowance = true;
+          } catch (fallbackError) {
+            console.error('Error in fallback allowance check:', fallbackError);
+            // Don't set allowance to 0 here, keep the last known value
+          }
         }
+      }
+      
+      // If we couldn't get the allowance through either method, log but don't reset to zero
+      if (!gotAllowance) {
+        console.warn('Could not refresh allowance, keeping last known value:', lastKnownAllowance);
       }
     } catch (error) {
       console.error('Error checking allowance:', error);
-      setAllowance('0');
+      // Don't set allowance to 0 here, keep the existing value
     } finally {
       setIsCheckingAllowance(false);
     }
