@@ -152,8 +152,13 @@ const BuyHonors = () => {
       
       console.log('Sending approval transaction with params:', approvalParams);
       
-      // Use the sendTransaction method directly
-      const approvalResult = await providers.ethereumProvider.sendTransaction(approvalParams);
+      // Use the request method with eth_sendTransaction instead of sendTransaction directly
+      // This is more compatible with different wallet providers
+      console.log('Using eth_sendTransaction for better wallet compatibility');
+      const approvalResult = await providers.ethereumProvider.request({
+        method: 'eth_sendTransaction',
+        params: [approvalParams]
+      });
       console.log('Approval transaction submitted:', approvalResult);
       
       setSuccessMessage('USDC approval successful! You can now buy Honors.');
@@ -257,41 +262,30 @@ const BuyHonors = () => {
         
         console.log('Sending deposit transaction with params:', depositParams);
         
-        // Use the sendTransaction method directly
-        depositResult = await providers.ethereumProvider.sendTransaction(depositParams);
+        // Use the request method with eth_sendTransaction directly
+        // This is more compatible with different wallet providers
+        console.log('Using eth_sendTransaction for better wallet compatibility');
+        
+        // Rename gasLimit to gas for compatibility
+        const txParams = {
+          from: userAddress,
+          to: contractAddresses[BASE_CHAIN_ID].USDC_MANAGER,
+          data: depositData,
+          value: '0x0',
+          gas: '0x100000' // Using gas instead of gasLimit for better compatibility
+        };
+        
+        console.log('Transaction parameters:', txParams);
+        
+        depositResult = await providers.ethereumProvider.request({
+          method: 'eth_sendTransaction',
+          params: [txParams]
+        });
         
         console.log('Deposit transaction submitted:', depositResult);
       } catch (depositError) {
         console.error('Error during deposit transaction:', depositError);
-        console.log('Deposit error details:', JSON.stringify(depositError, Object.getOwnPropertyNames(depositError)));
-        
-        // Try fallback with request method
-        console.log('Trying fallback with request method...');
-        
-        const fallbackInterface = new ethers.Interface([
-          "function depositUSDC(uint256 amount) returns (bool)"
-        ]);
-        
-        const fallbackData = fallbackInterface.encodeFunctionData("depositUSDC", [
-          amountInWei
-        ]);
-        
-        const tx = {
-          from: userAddress,
-          to: contractAddresses[BASE_CHAIN_ID].USDC_MANAGER,
-          data: fallbackData,
-          value: '0x0',
-          gas: '0x100000' // Using gas instead of gasLimit for the request method
-        };
-        
-        console.log('Fallback transaction parameters:', tx);
-        
-        depositResult = await providers.ethereumProvider.request({
-          method: 'eth_sendTransaction',
-          params: [tx]
-        });
-        
-        console.log('Deposit transaction submitted with fallback method:', depositResult);
+        throw depositError; // Re-throw to be caught by the outer try/catch
       }
       
       // If we got here, one of the methods worked

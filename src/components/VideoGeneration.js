@@ -61,70 +61,48 @@ const VideoGeneration = () => {
     setIsCheckingAllowance(true);
     
     try {
-      console.log('Checking HONOR token allowance for VideoManager...');
+      console.log('Checking allowance for user:', userAddress);
+      console.log('VideoManager address:', contracts.videoManager.target);
       
-      const honorTokenAddress = contracts.honorToken?.target;
-      const videoManagerAddress = contracts.videoManager?.target;
-      
-      if (!honorTokenAddress || !videoManagerAddress) {
-        console.error('Contract addresses not available');
-        return;
-      }
-      
-      // Store the last known allowance value to prevent flashing to zero
-      let lastKnownAllowance = allowance;
-      let gotAllowance = false;
-      
-      // Try to get the allowance using the contract's allowance method
+      // Use the provider's eth_call directly instead of contract method
       try {
-        const allowanceValue = await contracts.honorToken.allowance(userAddress, videoManagerAddress);
-        const formattedAllowance = ethers.formatUnits(allowanceValue, 6); // HONOR token has 6 decimals
+        // Get the ABI for the allowance function
+        const allowanceInterface = new ethers.Interface([
+          'function allowance(address owner, address spender) view returns (uint256)'
+        ]);
         
-        console.log('Current HONOR token allowance:', formattedAllowance);
+        // Encode the function call
+        const data = allowanceInterface.encodeFunctionData('allowance', [
+          userAddress,
+          contracts.videoManager.target
+        ]);
+        
+        console.log('Allowance check data:', data);
+        console.log('Honor token address:', contracts.honorToken.target);
+        
+        // Make the eth_call
+        const result = await providers.ethereumProvider.request({
+          method: 'eth_call',
+          params: [{
+            to: contracts.honorToken.target,
+            data: data
+          }, 'latest']
+        });
+        
+        // Decode the result
+        const decodedResult = allowanceInterface.decodeFunctionResult('allowance', result)[0];
+        const formattedAllowance = ethers.formatUnits(decodedResult, 6); // Assuming 6 decimals for HONOR token
+        console.log('Allowance from eth_call:', formattedAllowance);
         setAllowance(formattedAllowance);
-        gotAllowance = true;
-      } catch (contractError) {
-        console.error('Error calling allowance method directly:', contractError);
-        
-        // Fallback: Try using eth_call directly
-        if (!gotAllowance) {
-          try {
-            // Encode the allowance function call
-            const honorTokenInterface = new ethers.Interface([
-              'function allowance(address owner, address spender) view returns (uint256)'
-            ]);
-            
-            const data = honorTokenInterface.encodeFunctionData('allowance', [userAddress, videoManagerAddress]);
-            
-            // Make the eth_call
-            const result = await providers.ethereumProvider.request({
-              method: 'eth_call',
-              params: [{
-                to: honorTokenAddress,
-                data: data
-              }, 'latest']
-            });
-            
-            const decodedResult = honorTokenInterface.decodeFunctionResult('allowance', result);
-            const formattedAllowance = ethers.formatUnits(decodedResult[0], 6);
-            
-            console.log('Current HONOR token allowance (from eth_call):', formattedAllowance);
-            setAllowance(formattedAllowance);
-            gotAllowance = true;
-          } catch (fallbackError) {
-            console.error('Error in fallback allowance check:', fallbackError);
-            // Don't set allowance to 0 here, keep the last known value
-          }
-        }
-      }
-      
-      // If we couldn't get the allowance through either method, log but don't reset to zero
-      if (!gotAllowance) {
-        console.warn('Could not refresh allowance, keeping last known value:', lastKnownAllowance);
+      } catch (ethCallError) {
+        console.error('Error checking allowance with eth_call:', ethCallError);
+        // Keep the previous allowance value instead of resetting to zero
+        console.log('Keeping previous allowance value:', allowance);
       }
     } catch (error) {
       console.error('Error checking allowance:', error);
-      // Don't set allowance to 0 here, keep the existing value
+      // Keep the previous allowance value instead of resetting to zero
+      console.log('Keeping previous allowance value:', allowance);
     } finally {
       setIsCheckingAllowance(false);
     }
@@ -144,10 +122,50 @@ const VideoGeneration = () => {
     setPrompt(e.target.value);
   };
   
+  // Check if we're on the Base network
+  const checkNetwork = async () => {
+    try {
+      if (!providers?.ethereumProvider) {
+        throw new Error('Ethereum provider not available');
+      }
+      
+      // Check current chain ID
+      const chainIdValue = await providers.ethereumProvider.request({
+        method: 'eth_chainId'
+      });
+      
+      const currentChainId = typeof chainIdValue === 'string' && chainIdValue.startsWith('0x') 
+        ? parseInt(chainIdValue, 16) 
+        : Number(chainIdValue);
+      
+      console.log('Current chain ID:', currentChainId);
+      
+      // Base Mainnet chain ID
+      const BASE_CHAIN_ID = 8453;
+      
+      if (currentChainId !== BASE_CHAIN_ID) {
+        setError(`Please switch to Base network manually. Current network ID: ${currentChainId}, expected: ${BASE_CHAIN_ID}`);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error checking network:', error);
+      setError(`Error checking network: ${error.message}`);
+      return false;
+    }
+  };
+  
   // Handle HONOR token approval
   const handleApproveHonor = async () => {
     if (!isAuthenticated || !userAddress || !initialized || !contracts.videoManager || !contracts.honorToken) {
       setError('Please connect your wallet and try again.');
+      return;
+    }
+    
+    // Check if we're on the Base network
+    const isCorrectNetwork = await checkNetwork();
+    if (!isCorrectNetwork) {
       return;
     }
     
@@ -187,13 +205,18 @@ const VideoGeneration = () => {
         from: userAddress,
         data: data,
         value: '0x0',
-        gasLimit: '0x30000' // 196,608 gas - same as in BuyHonors component
+        gas: '0x30000' // Using gas instead of gasLimit for better compatibility
       };
       
       console.log('Sending approval transaction with parameters:', transactionParameters);
       
-      // Send the transaction using the Tomo SDK provider
-      const txHash = await providers.ethereumProvider.sendTransaction(transactionParameters);
+      // Use the request method with eth_sendTransaction instead of sendTransaction directly
+      // This is more compatible with different wallet providers
+      console.log('Using eth_sendTransaction for better wallet compatibility');
+      const txHash = await providers.ethereumProvider.request({
+        method: 'eth_sendTransaction',
+        params: [transactionParameters]
+      });
       
       console.log('Approval transaction sent:', txHash);
       setSuccessMessage('HONOR tokens approved successfully!');
@@ -249,16 +272,10 @@ const VideoGeneration = () => {
       setError('Please enter a prompt.');
       return;
     }
-
-    if (!initialized || !contracts.honorToken || !contracts.videoManager) {
-      setError('Contracts not initialized. Please try again.');
-      return;
-    }
     
-    // Check if the user has approved enough HONOR tokens
-    // Compare as numbers instead of using BigNumber methods
-    if (parseFloat(allowance) < parseFloat(videoFee)) {
-      setError(`Please approve at least ${videoFee} HONOR tokens before generating a video.`);
+    // Check if we're on the Base network
+    const isCorrectNetwork = await checkNetwork();
+    if (!isCorrectNetwork) {
       return;
     }
 
@@ -271,114 +288,160 @@ const VideoGeneration = () => {
       console.log('Generating video with prompt:', prompt);
       console.log('User address:', userAddress);
 
-      // Check HONOR token balance before proceeding
-      const balance = await contracts.honorToken.balanceOf(userAddress);
-      const formattedBalance = ethers.formatUnits(balance, 6); // Assuming 6 decimals for HONOR token
-      console.log('HONOR balance:', formattedBalance);
-
-      if (parseFloat(formattedBalance) < parseFloat(videoFee)) {
-        setError(`Insufficient HONOR tokens. You need ${videoFee} HONOR tokens to generate a video.`);
-        setIsGenerating(false);
-        return;
-      }
-
-      // Get the VideoManager contract interface for encoding the function call
+      // Get the VideoManager contract address from addresses.js
+      const videoManagerAddress = '0xDF8626Ffb23C8a92A7b906345E7aE756BABD02F4';
+      console.log('VideoManager address:', videoManagerAddress);
+      
+      // HYBRID APPROACH: Try multiple methods to ensure compatibility with all wallets
+      console.log('Using hybrid approach for maximum wallet compatibility');
+      
+      // Create the transaction data using ethers.js Interface
       const videoManagerInterface = new ethers.Interface([
-        'function createOriginalVideo(string prompt) returns (uint256)'
+        'function createOriginalVideo(string prompt) payable returns (uint256)'
       ]);
       
-      // Encode the createOriginalVideo function call
       const data = videoManagerInterface.encodeFunctionData('createOriginalVideo', [prompt]);
+      console.log('Transaction data:', data);
       
-      // Get the VideoManager contract address
-      const videoManagerAddress = contracts.videoManager?.target;
-      if (!videoManagerAddress) {
-        throw new Error('VideoManager contract address not available');
-      }
+      // Convert 0.001 ETH to wei (hexadecimal)
+      const valueInWei = ethers.parseEther('0.001');
+      const valueHex = '0x' + valueInWei.toString(16);
       
-      // Try a different approach - use the contract instance directly
-      try {
-        console.log('Attempting to use contract instance directly...');
-        
-        // First check HONOR balance directly
-        const honorBalance = await contracts.honorToken.balanceOf(userAddress);
-        console.log('Current HONOR balance:', ethers.formatUnits(honorBalance, 6));
-        console.log('Required HONOR:', videoFee);
-        
-        // Check allowance directly
-        const currentAllowance = await contracts.honorToken.allowance(userAddress, videoManagerAddress);
-        console.log('Current allowance:', ethers.formatUnits(currentAllowance, 6));
-        
-        // Try to get a signer from the provider
-        console.log('Getting signer from provider...');
-        const provider = new ethers.BrowserProvider(providers.ethereumProvider);
-        const signer = await provider.getSigner();
-        console.log('Got signer:', await signer.getAddress());
-        
-        // Create a contract instance with the signer
-        console.log('Creating contract instance with signer...');
-        const videoManagerContract = new ethers.Contract(
-          videoManagerAddress,
-          [
-            'function createOriginalVideo(string prompt) external payable returns (uint256)'
-          ],
-          signer
-        );
-        
-        console.log('Calling createOriginalVideo directly on contract...');
-        // Call the function directly on the contract with the value
-        const tx = await videoManagerContract.createOriginalVideo(
-          prompt,
-          { 
-            value: ethers.parseEther('0.001'),
-            gasLimit: ethers.toBigInt('0x100000') // 1,048,576 gas
-          }
-        );
-        
-        console.log('Transaction sent:', tx.hash);
-        const txHash = tx.hash;
-        console.log('Video generation transaction sent:', txHash);
-        
-        setTxHash(txHash);
-        setSuccessMessage('Video generation transaction submitted successfully!');
-      } catch (txError) {
-        // Extract the revert reason if available
-        console.error('Transaction error details:', txError);
-        
-        if (txError.data) {
-          console.error('Error data:', txError.data);
-        }
-        
-        if (txError.message) {
-          console.error('Error message:', txError.message);
-          throw new Error(`Transaction failed: ${txError.message}`);
-        } else {
-          throw txError;
+      // METHOD 1: Try using the contract from Web3Context if available
+      if (contracts?.videoManager) {
+        try {
+          console.log('ATTEMPT 1: Using contract from Web3Context');
+          
+          const overrides = {
+            value: valueInWei,
+            gasLimit: 5000000 // 5 million gas
+          };
+          
+          console.log('Transaction overrides:', overrides);
+          
+          const tx = await contracts.videoManager.createOriginalVideo(prompt, overrides);
+          console.log('Transaction submitted via Web3Context:', tx.hash);
+          
+          // Store the transaction hash
+          setTxHash(tx.hash);
+          setSuccessMessage('Video generation transaction submitted successfully!');
+          
+          // Wait for transaction confirmation
+          console.log('Waiting for transaction confirmation...');
+          const receipt = await tx.wait(1); // Wait for 1 confirmation
+          console.log('Transaction confirmed:', receipt);
+          
+          setSuccessMessage('Video generation transaction confirmed! Video ID will be available soon.');
+          return; // Exit if successful
+        } catch (contractError) {
+          console.error('Error using Web3Context contract:', contractError);
+          console.log('Falling back to alternative methods...');
+          // Continue to next method
         }
       }
-
-      // Refresh HONOR balance and allowance after transaction
-      refreshHonorBalance();
-      checkAllowance();
-
-      // For demo purposes, simulate a generated video
-      const videoData = {
-        url: 'https://example.com/video.mp4',
-        prompt: prompt,
-        timestamp: new Date().toISOString(),
-        choices: [
-          { id: 'choice1', text: 'Option A: Continue the story' },
-          { id: 'choice2', text: 'Option B: Take a different path' }
-        ],
-        creator: userAddress,
-        createdAt: new Date().toISOString(),
-        txHash: txHash
-      };
       
-      setGeneratedVideo(videoData);
-      setPrompt('');
-
-      console.log('Video generated successfully');
+      // METHOD 2: Try using eth_sendTransaction directly
+      if (providers?.ethereumProvider) {
+        try {
+          console.log('ATTEMPT 2: Using eth_sendTransaction directly');
+          
+          // Get current gas price from the network
+          const feeData = await providers.ethereumProvider.request({
+            method: 'eth_gasPrice',
+            params: []
+          });
+          
+          console.log('Current gas price:', feeData);
+          
+          // Convert gas price to number and add 100% to ensure it's not underpriced
+          const gasPrice = parseInt(feeData, 16);
+          const adjustedGasPrice = '0x' + Math.floor(gasPrice * 3).toString(16); // Triple the gas price
+          
+          console.log('Adjusted gas price (3x):', adjustedGasPrice);
+          
+          // Create the transaction parameters
+          const txParams = {
+            from: userAddress,
+            to: videoManagerAddress,
+            data: data,
+            value: valueHex,
+            gasLimit: '0x4C4B40', // 5 million gas in hex
+            gasPrice: adjustedGasPrice
+          };
+          
+          console.log('Transaction parameters:', JSON.stringify(txParams, null, 2));
+          
+          // Send the transaction using the request method
+          const txResult = await providers.ethereumProvider.request({
+            method: 'eth_sendTransaction',
+            params: [txParams]
+          });
+          
+          console.log('Transaction submitted via eth_sendTransaction:', txResult);
+          
+          // Store the transaction hash
+          setTxHash(txResult);
+          setSuccessMessage('Video generation transaction submitted successfully!');
+          return; // Exit if successful
+        } catch (providerError) {
+          console.error('Error using eth_sendTransaction:', providerError);
+          console.log('Falling back to final method...');
+          // Continue to next method
+        }
+      }
+      
+      // METHOD 3: Last resort - try creating a BrowserProvider and signer
+      if (providers?.ethereumProvider) {
+        try {
+          console.log('ATTEMPT 3: Using ethers BrowserProvider');
+          
+          // Create an ethers.js BrowserProvider from the Tomo provider
+          const browserProvider = new ethers.BrowserProvider(providers.ethereumProvider);
+          
+          // Get the signer from the provider
+          console.log('Getting signer from provider...');
+          const signer = await browserProvider.getSigner();
+          console.log('Got signer with address:', await signer.getAddress());
+          
+          // Create a contract instance with the signer
+          console.log('Creating contract instance...');
+          const videoManagerContract = new ethers.Contract(
+            videoManagerAddress,
+            ['function createOriginalVideo(string prompt) payable returns (uint256)'],
+            signer
+          );
+          
+          // Call the contract function directly with value
+          console.log('Calling contract function directly...');
+          const tx = await videoManagerContract.createOriginalVideo(
+            prompt,
+            {
+              value: valueInWei,
+              gasLimit: 5000000 // 5 million gas
+            }
+          );
+          
+          console.log('Transaction submitted via BrowserProvider:', tx.hash);
+          
+          // Store the transaction hash
+          setTxHash(tx.hash);
+          setSuccessMessage('Video generation transaction submitted successfully!');
+          
+          // Wait for transaction confirmation
+          console.log('Waiting for transaction confirmation...');
+          const receipt = await tx.wait(1); // Wait for 1 confirmation
+          console.log('Transaction confirmed:', receipt);
+          
+          setSuccessMessage('Video generation transaction confirmed! Video ID will be available soon.');
+          return; // Exit if successful
+        } catch (browserProviderError) {
+          console.error('Error using BrowserProvider:', browserProviderError);
+          throw new Error('All transaction methods failed. Please try again later.');
+        }
+      }
+      
+      // If we get here, all methods failed
+      throw new Error('Could not find a compatible method to send the transaction');
     } catch (err) {
       console.error('Error generating video:', err);
       setError(`Error generating video: ${err.message || err}`);
