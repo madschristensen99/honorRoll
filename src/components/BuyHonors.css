@@ -315,3 +315,91 @@
   font-size: 1.5rem;
   color: var(--text-color);
 }
+
+/* Mobile Responsiveness */
+@media screen and (max-width: 768px) {
+  .buy-honors-container {
+    padding: 1rem;
+  }
+
+  .buy-honors-container h2 {
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .honors-info {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .honors-headline {
+    font-size: 1.8rem;
+  }
+
+  .honors-tagline {
+    font-size: 1.1rem;
+  }
+
+  .honors-benefits {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .benefit-item {
+    padding: 1rem;
+  }
+
+  .button-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .approve-btn, .buy-btn {
+    width: 100%;
+    padding: 0.8rem;
+    font-size: 1.1rem;
+  }
+
+  .price-display {
+    padding: 1rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .buy-honors-container h2 {
+    font-size: 1.7rem;
+  }
+
+  .honors-headline {
+    font-size: 1.5rem;
+  }
+
+  .honors-tagline {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .amount-input-container label {
+    font-size: 1.1rem;
+  }
+
+  .amount-input-container input {
+    padding: 0.8rem;
+    font-size: 1.1rem;
+  }
+
+  .price-display {
+    transform: none;
+  }
+
+  .price-display::before {
+    top: -10px;
+    left: 10px;
+    font-size: 1.5rem;
+  }
+
+  .honors-cta {
+    font-size: 1.2rem;
+    padding: 0.8rem;
+  }
+}

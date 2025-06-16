@@ -1,6 +1,7 @@
 .voting-container {
   max-width: 1200px;
   margin: 0 auto;
+  padding: 0 1rem;
 }
 
 .voting-container h2 {
@@ -548,8 +549,118 @@
   border-radius: 4px;
 }
 
+/* Responsive styles */
 @media (min-width: 768px) {
   .videos-grid {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .voting-container h2 {
+    font-size: 2rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .user-balance {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+    padding: 0.75rem 1rem;
+  }
+  
+  .videos-grid {
+    gap: 1.5rem;
+  }
+  
+  .video-card {
+    max-width: 100%;
+  }
+  
+  .video-thumbnail {
+    height: 300px;
+  }
+  
+  .video-prompt {
+    font-size: 1.1rem;
+  }
+  
+  .choices-heading {
+    font-size: 1.2rem;
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .choice-option {
+    padding: 0.75rem;
+  }
+  
+  .choice-content p {
+    font-size: 1rem;
+  }
+  
+  .voting-panel {
+    padding: 1.25rem;
+  }
+  
+  .voting-panel h3 {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .voting-container h2 {
+    font-size: 1.8rem;
+    padding: 0.4rem 0.8rem;
+    margin-bottom: 1rem;
+  }
+  
+  .videos-grid::before {
+    font-size: 0.9rem;
+    padding: 4px 10px;
+    top: -25px;
+  }
+  
+  .video-thumbnail {
+    height: 250px;
+  }
+  
+  .video-card:hover {
+    transform: translateY(-4px) rotate(0.5deg);
+  }
+  
+  .video-details {
+    padding: 0.75rem;
+  }
+  
+  .prompt-bubble {
+    padding: 0.75rem 1rem;
+  }
+  
+  .video-prompt {
+    font-size: 1rem;
+  }
+  
+  .prompt-emoji {
+    font-size: 1.2rem;
+  }
+  
+  .choice-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 1.2rem;
+  }
+  
+  .choice-stats {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .stake-vote-btn {
+    padding: 0.6rem 1rem;
+  }
+  
+  .voting-info {
+    font-size: 0.8rem;
   }
 }

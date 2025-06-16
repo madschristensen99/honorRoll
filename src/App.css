@@ -10,6 +10,8 @@
   --accent-color: #FFD166;
   --accent-color-2: #06D6A0;
   --accent-color-3: #118AB2;
+  --mobile-breakpoint: 768px;
+  --small-mobile-breakpoint: 480px;
 }
 
 * {
@@ -50,6 +52,7 @@ body {
   border-radius: 0 0 15px 15px;
   position: relative;
   z-index: 10;
+  flex-wrap: wrap;
 }
 
 .App-header h1 {
@@ -63,6 +66,7 @@ body {
 .nav-links {
   display: flex;
   list-style: none;
+  flex-wrap: wrap;
 }
 
 .nav-links li {
@@ -101,6 +105,7 @@ main {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .card {
@@ -215,6 +220,7 @@ footer {
   margin-top: auto;
   border-top: 4px dashed var(--accent-color);
   position: relative;
+  width: 100%;
 }
 
 footer::before {
@@ -227,4 +233,76 @@ footer::before {
   background-image: linear-gradient(45deg, var(--accent-color) 25%, transparent 25%), 
                     linear-gradient(-45deg, var(--accent-color) 25%, transparent 25%);
   background-size: 20px 20px;
+}
+
+/* Mobile Responsiveness */
+@media screen and (max-width: 768px) {
+  .App-header {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .App-header h1 {
+    font-size: 1.8rem;
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .nav-links {
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .nav-links li {
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .nav-links a {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+  }
+
+  main {
+    padding: 1rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .App-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .nav-links li {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+    width: 100%;
+    text-align: center;
+  }
+
+  .nav-links a {
+    display: block;
+    width: 100%;
+  }
+
+  input, textarea {
+    font-size: 0.9rem;
+    padding: 0.6rem;
+  }
 }
