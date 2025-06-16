@@ -131,7 +131,7 @@ const Voting = () => {
         // If no videos, set empty array and show message
         if (videoCount.toNumber() === 0) {
           setVideos([]);
-          setError('No videos available yet. Create a video first!');
+          setError('Cant find videos, try refreshing the page');
           setLoading(false);
           return;
         }
@@ -325,7 +325,7 @@ const Voting = () => {
       
       {loading && <div className="loading">Loading videos...</div>}
       {/* Error message removed as requested */}
-      {!loading && videos.length === 0 && <div className="no-videos">No videos available yet. Create a video first!</div>}
+      {!loading && videos.length === 0 && <div className="no-videos">Cant find videos, try refreshing page</div>}
       
       {videos.length > 0 && (
         <>
